@@ -294,6 +294,4 @@ defmodule EctoOrderedTest.Scoped do
     assert Repo.get(Model, model4.id).scoped_position == 3
     assert Repo.get(Model, model5.id).scoped_position == 4
   end
-
-
 end
