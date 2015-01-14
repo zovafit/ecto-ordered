@@ -119,7 +119,7 @@ defmodule EctoOrdered do
       |
       def unquote(move)(model, new_position) do
         cs = model
-         |> changeset(unquote(move)) |> put_change(unquote(opts[:field]), new_position)
+         |> change([{unquote(opts[:field]), new_position}])
         %Ecto.Changeset{cs | valid?: true}
       end
 
@@ -147,15 +147,14 @@ defmodule EctoOrdered do
     module = cs.model.__struct__
     max = (rows == [] && 0) || Enum.max(rows)
     cond do
-      (is_nil(Map.get(cs.model, field)) and is_nil(cs.changes[field])) or
-      (Map.has_key?(cs.changes,field) and cs.changes[field] == nil) ->
+      is_nil(get_field(cs, field)) ->
         # Doesn't have a position assigned
         cs |>
           put_change(field, max + 1)
-      not is_nil(Map.get(cs.model, field)) or not is_nil(cs.changes[field]) ->
+      not is_nil(get_field(cs, field)) ->
          # Has a position assigned
-         module.__ecto_ordered__increment_position_query__(p, cs.changes[field], Map.get(cs.model, scope_field))
-         validate_position!(cs, field, cs.changes[field], max)
+         module.__ecto_ordered__increment_position_query__(p, get_change(cs, field), Map.get(cs.model, scope_field))
+         validate_position!(cs, field, get_change(cs, field), max)
       true ->
         cs
     end
@@ -169,20 +168,20 @@ defmodule EctoOrdered do
     module = cs.model.__struct__
     max = (rows == [] && 0) || Enum.max(rows)
     cond do
-      Map.has_key?(cs.changes, field) and cs.changes[field] != Map.get(cs.model, field) and
-      cs.changes[field] > Map.get(cs.model, field) ->
-        module.__ecto_ordered__decrement_position_query__(p, Map.get(cs.model, field), cs.changes[field], Map.get(cs.model, scope_field))
-        cs = if cs.changes[field] == max + 1 do
+      Map.has_key?(cs.changes, field) and get_change(cs, field) != Map.get(cs.model, field) and
+      get_change(cs, field) > Map.get(cs.model, field) ->
+        module.__ecto_ordered__decrement_position_query__(p, Map.get(cs.model, field), get_change(cs, field), Map.get(cs.model, scope_field))
+        cs = if get_change(cs, field) == max + 1 do
           cs |> put_change(field, max)
         else
           cs
         end
-        validate_position!(cs, field, cs.changes[field], max)
-      Map.has_key?(cs.changes, field) and cs.changes[field] != Map.get(cs.model, field) and
-      cs.changes[field] < Map.get(cs.model, field) ->
+        validate_position!(cs, field, get_change(cs, field), max)
+      Map.has_key?(cs.changes, field) and get_change(cs, field) != Map.get(cs.model, field) and
+      get_change(cs, field) < Map.get(cs.model, field) ->
         module.__ecto_ordered__decrement_position_query__(p, Map.get(cs.model, field), max, Map.get(cs.model, scope_field))
-        module.__ecto_ordered__increment_position_query__(p, cs.changes[field], Map.get(cs.model, scope_field))
-        validate_position!(cs, field, cs.changes[field], max)
+        module.__ecto_ordered__increment_position_query__(p, get_change(cs, field), Map.get(cs.model, scope_field))
+        validate_position!(cs, field, get_change(cs, field), max)
       true ->
         cs
     end

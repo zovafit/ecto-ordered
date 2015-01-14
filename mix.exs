@@ -3,7 +3,7 @@ defmodule EctoOrdered.Mixfile do
 
   def project do
     [app: :ecto_ordered,
-     version: "0.0.1",
+     version: "0.0.2",
      elixir: "~> 1.0",
      description: "Ecto extension to support ordered list models",
      package: package,
@@ -28,7 +28,7 @@ defmodule EctoOrdered.Mixfile do
   # Type `mix help deps` for more examples and options
   defp deps do
     [
-     {:ecto, "~> 0.5.0"},
+     {:ecto, "~> 0.5.1"},
      {:postgrex, "~> 0.6.0", only: :test},
     ]
   end
