@@ -37,25 +37,14 @@ defmodule EctoOrdered do
       require unquote(repo)
       alias Ecto.Query
 
-      defp __ecto_ordered__increment__(query)  do
+      def __ecto_ordered__increment__(query)  do
         unquote(repo).update_all(m in query,
         [{unquote(field), fragment("? + 1", m.unquote(field))}])
       end
 
-      defp __ecto_ordered__decrement__(query)  do
+      def __ecto_ordered__decrement__(query)  do
         unquote(repo).update_all(m in query,
         [{unquote(field), fragment("? - 1", m.unquote(field))}])
-      end
-
-      def __ecto_ordered__increment_position_query__(split_by, nil) do
-        query = Query.from m in __MODULE__,
-                where: m.unquote(field) >= ^split_by
-        __ecto_ordered__increment__(query)
-      end
-      def __ecto_ordered__increment_position_query__(split_by, scope) do
-        query = Query.from m in __MODULE__,
-                where: m.unquote(field) >= ^split_by and m.unquote(scope) == ^scope
-        __ecto_ordered__increment__(query)
       end
 
       def __ecto_ordered__decrement_position_query__(split_by, until, nil) do
@@ -115,6 +104,17 @@ defmodule EctoOrdered do
     Ecto.Query.select(q, [m], field(m, ^field))
   end
 
+  def increment_position_query(module, field, _module_scope, split_by, nil) do
+    query = from m in module,
+            where: field(m, ^field) >= ^split_by
+    module.__ecto_ordered__increment__(query)
+  end
+  def increment_position_query(module, field, module_scope, split_by, scope) do
+    query = from m in module,
+            where: field(m, ^field) >= ^split_by and field(m, ^module_scope) == ^scope
+    module.__ecto_ordered__increment__(query)
+  end
+
   defp validate_position!(cs, field, position, max) when position > max + 1 do
     raise EctoOrdered.InvalidMove, type: :too_large
     %Ecto.Changeset{ cs | valid?: false } |> add_error(field, :too_large)
@@ -125,16 +125,15 @@ defmodule EctoOrdered do
   end
   defp validate_position!(cs, _, _, _), do: cs
 
-  def before_insert(cs, repo, field, scope) do
+  def before_insert(%{model: %{__struct__: module}} = cs, repo, field, scope) do
     rows = lock_table(cs, scope, field) |> repo.all
-    module = cs.model.__struct__
     max = (rows == [] && 0) || Enum.max(rows)
     position_assigned = get_field(cs, field)
 
     if position_assigned do
       new_position = get_change(cs, field)
       scope_field = get_field(cs, scope)
-      module.__ecto_ordered__increment_position_query__(new_position, scope_field)
+      EctoOrdered.increment_position_query(module, field, scope, new_position, scope_field)
       validate_position!(cs, field, new_position, max)
     else
       put_change(cs, field, max + 1)
@@ -159,21 +158,22 @@ defmodule EctoOrdered do
     max = (rows == [] && 0) || Enum.max(rows)
     new_position = get_change(cs, field)
     field_value = Map.get(cs.model, field)
-    scope_field = get_field(cs, scope)
 
-    adjust_position(cs, module, max, field, scope_field, new_position, field_value)
+    adjust_position(cs, module, max, field, scope, new_position, field_value)
   end
 
-  defp adjust_position(cs, module, max, field, scope_field, new_position, field_value)
+  defp adjust_position(cs, module, max, field, scope, new_position, field_value)
       when new_position > field_value do
+    scope_field = get_field(cs, scope)
     module.__ecto_ordered__decrement_position_query__(field_value, new_position, scope_field)
     cs = if new_position == max + 1, do: put_change(cs, field, max), else: cs
     validate_position!(cs, field, new_position, max)
   end
-  defp adjust_position(cs, module, max, field, scope_field, new_position, field_value)
+  defp adjust_position(cs, module, max, field, scope, new_position, field_value)
       when new_position < field_value do
+    scope_field = get_field(cs, scope)
     module.__ecto_ordered__decrement_position_query__(field_value, max, scope_field)
-    module.__ecto_ordered__increment_position_query__(new_position, scope_field)
+    EctoOrdered.increment_position_query(module, field, scope, new_position, scope_field)
     validate_position!(cs, field, new_position, max)
   end
   defp adjust_position(cs, _, _, _, _, _, _) do
