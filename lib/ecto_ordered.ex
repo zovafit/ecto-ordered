@@ -40,49 +40,53 @@ defmodule EctoOrdered do
         Ecto.Query.select(q, [m], m.unquote(opts[:field]))
       end
 
+      defp __ecto_ordered__increment__(query, unquote(opts))  do
+        unquote(opts[:repo]).update_all(m in query,
+        [{unquote(opts[:field]), fragment("? + 1", m.unquote(opts[:field]))}])
+      end
+
+      defp __ecto_ordered__decrement__(query, unquote(opts))  do
+        unquote(opts[:repo]).update_all(m in query,
+        [{unquote(opts[:field]), fragment("? - 1", m.unquote(opts[:field]))}])
+      end
+
       if is_nil(unquote(opts[:scope])) do
         def __ecto_ordered__increment_position_query__(unquote(opts), split_by, _scope) do
           query = Ecto.Query.from(m in __MODULE__, where: m.unquote(opts[:field]) >= ^split_by)
-          unquote(opts[:repo]).update_all(m in query,
-           [{unquote(opts[:field]), fragment("? + 1", m.unquote(opts[:field]))}])
+          __ecto_ordered__increment__(query, unquote(opts))
         end
 
         def __ecto_ordered__decrement_position_query__(unquote(opts), split_by, until, _scope) do
           query = Ecto.Query.from(m in __MODULE__, where: m.unquote(opts[:field]) > ^split_by
                                   and m.unquote(opts[:field]) <= ^until)
-          unquote(opts[:repo]).update_all(m in query,
-          [{unquote(opts[:field]), fragment("? - 1", m.unquote(opts[:field]))}])
+          __ecto_ordered__decrement__(query, unquote(opts))
         end
 
       else
         def __ecto_ordered__increment_position_query__(unquote(opts), split_by, nil) do
           query = Ecto.Query.from(m in __MODULE__, where: m.unquote(opts[:field]) >= ^split_by
-          and is_nil(m.unquote(opts[:scope])))
-          unquote(opts[:repo]).update_all(m in query,
-          [{unquote(opts[:field]), fragment("? + 1", m.unquote(opts[:field]))}])
+                                                          and is_nil(m.unquote(opts[:scope])))
+          __ecto_ordered__increment__(query, unquote(opts))
         end
 
         def __ecto_ordered__increment_position_query__(unquote(opts), split_by, scope) do
           query = Ecto.Query.from(m in __MODULE__, where: m.unquote(opts[:field]) >= ^split_by
                                                    and m.unquote(opts[:scope]) == ^scope)
-          unquote(opts[:repo]).update_all(m in query,
-          [{unquote(opts[:field]), fragment("? + 1", m.unquote(opts[:field]))}])
+          __ecto_ordered__increment__(query, unquote(opts))
         end
 
         def __ecto_ordered__decrement_position_query__(unquote(opts), split_by, until, nil) do
           query = Ecto.Query.from(m in __MODULE__, where: m.unquote(opts[:field]) > ^split_by
-          and m.unquote(opts[:field]) <= ^until
-          and is_nil(m.unquote(opts[:scope])))
-          unquote(opts[:repo]).update_all(m in query,
-          [{unquote(opts[:field]), fragment("? - 1", m.unquote(opts[:field]))}])
+                                                          and m.unquote(opts[:field]) <= ^until
+                                                          and is_nil(m.unquote(opts[:scope])))
+          __ecto_ordered__decrement__(query, unquote(opts))
         end
 
         def __ecto_ordered__decrement_position_query__(unquote(opts), split_by, until, scope) do
           query = Ecto.Query.from(m in __MODULE__, where: m.unquote(opts[:field]) > ^split_by
                                                    and m.unquote(opts[:field]) <= ^until
                                                    and m.unquote(opts[:scope]) == ^scope)
-          unquote(opts[:repo]).update_all(m in query,
-          [{unquote(opts[:field]), fragment("? - 1", m.unquote(opts[:field]))}])
+          __ecto_ordered__decrement__(query, unquote(opts))
         end
       end
 
