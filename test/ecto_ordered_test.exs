@@ -266,14 +266,15 @@ defmodule EctoOrderedTest.Scoped do
     model2 |> Model.move_scoped_position(4) |> Ecto.Changeset.put_change(:scope, 2) |> Repo.update
 
     assert Repo.get(Model, model1.id).scoped_position == 1
+    assert Repo.get(Model, model1.id).scope == 1
     assert Repo.get(Model, model3.id).scoped_position == 2
+    assert Repo.get(Model, model3.id).scope == 1
 
     assert Repo.get(Model, xmodel1.id).scoped_position == 1
     assert Repo.get(Model, xmodel2.id).scoped_position == 2
     assert Repo.get(Model, xmodel3.id).scoped_position == 3
     assert Repo.get(Model, model2.id).scoped_position == 4
-
-
+    assert Repo.get(Model, model2.id).scope == 2
   end
 
 
