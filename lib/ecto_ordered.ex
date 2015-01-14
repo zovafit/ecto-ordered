@@ -47,18 +47,6 @@ defmodule EctoOrdered do
         [{unquote(field), fragment("? - 1", m.unquote(field))}])
       end
 
-      def __ecto_ordered__decrement_position_query__(split_by, until, nil) do
-        query = Query.from m in __MODULE__,
-                where: m.unquote(field) > ^split_by and m.unquote(field) <= ^until
-        __ecto_ordered__decrement__(query)
-      end
-      def __ecto_ordered__decrement_position_query__(split_by, until, scope) do
-        query = Query.from m in __MODULE__,
-                where: m.unquote(field) > ^split_by and m.unquote(field) <= ^until
-                       and m.unquote(scope) == ^scope
-        __ecto_ordered__decrement__(query)
-      end
-
       def __ecto_ordered__scope_query__(q, scope) do
         q
         |> EctoOrdered.select(unquote(field))
@@ -104,15 +92,27 @@ defmodule EctoOrdered do
     Ecto.Query.select(q, [m], field(m, ^field))
   end
 
-  def increment_position_query(module, field, _module_scope, split_by, nil) do
+  def increment_position_query(module, field, _scope, split_by, nil) do
     query = from m in module,
             where: field(m, ^field) >= ^split_by
     module.__ecto_ordered__increment__(query)
   end
-  def increment_position_query(module, field, module_scope, split_by, scope) do
+  def increment_position_query(module, field, scope, split_by, scope_value) do
     query = from m in module,
-            where: field(m, ^field) >= ^split_by and field(m, ^module_scope) == ^scope
+            where: field(m, ^field) >= ^split_by and field(m, ^scope) == ^scope_value
     module.__ecto_ordered__increment__(query)
+  end
+
+  def decrement_position_query(module, field, _scope, split_by, until, nil) do
+    query = from m in module,
+            where: field(m, ^field) > ^split_by and field(m, ^field) <= ^until
+    module.__ecto_ordered__decrement__(query)
+  end
+  def decrement_position_query(module, field, scope, split_by, until, scope_value) do
+    query = from m in module,
+            where: field(m, ^field) > ^split_by and field(m, ^field) <= ^until
+                   and field(m, ^scope) == ^scope_value
+    module.__ecto_ordered__decrement__(query)
   end
 
   defp validate_position!(cs, field, position, max) when position > max + 1 do
@@ -132,8 +132,8 @@ defmodule EctoOrdered do
 
     if position_assigned do
       new_position = get_change(cs, field)
-      scope_field = get_field(cs, scope)
-      EctoOrdered.increment_position_query(module, field, scope, new_position, scope_field)
+      scope_value = get_field(cs, scope)
+      EctoOrdered.increment_position_query(module, field, scope, new_position, scope_value)
       validate_position!(cs, field, new_position, max)
     else
       put_change(cs, field, max + 1)
@@ -164,16 +164,17 @@ defmodule EctoOrdered do
 
   defp adjust_position(cs, module, max, field, scope, new_position, field_value)
       when new_position > field_value do
-    scope_field = get_field(cs, scope)
-    module.__ecto_ordered__decrement_position_query__(field_value, new_position, scope_field)
+    scope_value = get_field(cs, scope)
+    decrement_position_query(module, field, scope, field_value, new_position, scope_value)
     cs = if new_position == max + 1, do: put_change(cs, field, max), else: cs
     validate_position!(cs, field, new_position, max)
   end
   defp adjust_position(cs, module, max, field, scope, new_position, field_value)
       when new_position < field_value do
-    scope_field = get_field(cs, scope)
-    module.__ecto_ordered__decrement_position_query__(field_value, max, scope_field)
-    EctoOrdered.increment_position_query(module, field, scope, new_position, scope_field)
+    scope_value = get_field(cs, scope)
+
+    decrement_position_query(module, field, scope, field_value, max, scope_value)
+    increment_position_query(module, field, scope, new_position, scope_value)
     validate_position!(cs, field, new_position, max)
   end
   defp adjust_position(cs, _, _, _, _, _, _) do
@@ -186,15 +187,15 @@ defmodule EctoOrdered do
     field_value = Map.get(cs.model, field)
     new_scope = get_field(cs, scope)
 
-    module.__ecto_ordered__decrement_position_query__(field_value, max, new_scope)
+    decrement_position_query(module, field, scope, field_value, max, new_scope)
     cs
   end
 
   defp lock_table(%{model: %{__struct__: module}}, nil, field) do
     q = from m in module, lock: "FOR UPDATE"
-    EctoOrdered.select(q, field)
+    select(q, field)
   end
-  defp lock_table(%{model: %{__struct__: module}} = cs, scope, field) do
+  defp lock_table(%{model: %{__struct__: module}} = cs, scope, _field) do
     q = from m in module, lock: "FOR UPDATE"
 
     case get_field(cs, scope) do
