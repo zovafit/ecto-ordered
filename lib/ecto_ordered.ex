@@ -35,10 +35,7 @@ defmodule EctoOrdered do
     quote location: :keep do
       require Ecto.Query
       require unquote(repo)
-
-      def __ecto_ordered__select__(q) do
-        Ecto.Query.select(q, [m], m.unquote(field))
-      end
+      alias Ecto.Query
 
       defp __ecto_ordered__increment__(query)  do
         unquote(repo).update_all(m in query,
@@ -52,50 +49,50 @@ defmodule EctoOrdered do
 
       if unquote(scope) do
         def __ecto_ordered__increment_position_query__(split_by, nil) do
-          query = Ecto.Query.from(m in __MODULE__, where: m.unquote(field) >= ^split_by
-                                                          and is_nil(m.unquote(scope)))
+          query = Query.from m in __MODULE__,
+                  where: m.unquote(field) >= ^split_by and is_nil(m.unquote(scope))
           __ecto_ordered__increment__(query)
         end
 
         def __ecto_ordered__increment_position_query__(split_by, scope) do
-          query = Ecto.Query.from(m in __MODULE__, where: m.unquote(field) >= ^split_by
-                                                   and m.unquote(scope) == ^scope)
+          query = Query.from m in __MODULE__,
+                  where: m.unquote(field) >= ^split_by and m.unquote(scope) == ^scope
           __ecto_ordered__increment__(query)
         end
 
         def __ecto_ordered__decrement_position_query__(split_by, until, nil) do
-          query = Ecto.Query.from(m in __MODULE__, where: m.unquote(field) > ^split_by
-                                                          and m.unquote(field) <= ^until
-                                                          and is_nil(m.unquote(scope)))
+          query = Query.from m in __MODULE__,
+                  where: m.unquote(field) > ^split_by and m.unquote(field) <= ^until
+                         and is_nil(m.unquote(scope))
           __ecto_ordered__decrement__(query)
         end
 
         def __ecto_ordered__decrement_position_query__(split_by, until, scope) do
-          query = Ecto.Query.from(m in __MODULE__, where: m.unquote(field) > ^split_by
-                                                   and m.unquote(field) <= ^until
-                                                   and m.unquote(scope) == ^scope)
+          query = Query.from(m in __MODULE__,
+                  where: m.unquote(field) > ^split_by and m.unquote(field) <= ^until
+                         and m.unquote(scope) == ^scope)
           __ecto_ordered__decrement__(query)
         end
 
         def __ecto_ordered__scope_query__(q, scope) do
           q
-          |> __ecto_ordered__select__()
-          |> Ecto.Query.where([m], m.unquote(scope) == ^scope)
+          |> EctoOrdered.select(unquote(field))
+          |> Query.where([m], m.unquote(scope) == ^scope)
         end
 
         def __ecto_ordered__scope_nil_query__(q) do
           q
-          |> __ecto_ordered__select__()
-          |> Ecto.Query.where([m], is_nil(m.unquote(scope)))
+          |> EctoOrdered.select(unquote(field))
+          |> Query.where([m], is_nil(m.unquote(scope)))
         end
       else
         def __ecto_ordered__increment_position_query__(split_by, _scope) do
-          query = Ecto.Query.from(m in __MODULE__, where: m.unquote(field) >= ^split_by)
+          query = Query.from(m in __MODULE__, where: m.unquote(field) >= ^split_by)
           __ecto_ordered__increment__(query)
         end
 
         def __ecto_ordered__decrement_position_query__(split_by, until, _scope) do
-          query = Ecto.Query.from(m in __MODULE__, where: m.unquote(field) > ^split_by
+          query = Query.from(m in __MODULE__, where: m.unquote(field) > ^split_by
                                   and m.unquote(field) <= ^until)
           __ecto_ordered__decrement__(query)
         end
@@ -110,7 +107,7 @@ defmodule EctoOrdered do
 
       def changeset(model, unquote(move), params) do
         params
-          |> cast(model, [unquote(field)], [])
+        |> cast(model, [unquote(field)], [])
       end
 
       @doc """
@@ -118,7 +115,7 @@ defmodule EctoOrdered do
       """
       def unquote(move)(model, new_position) do
         cs = model
-         |> change([{unquote(field), new_position}])
+             |> change([{unquote(field), new_position}])
         %Ecto.Changeset{cs | valid?: true}
       end
 
@@ -128,6 +125,10 @@ defmodule EctoOrdered do
       before_update EctoOrdered, :before_update, callback_args
       before_delete EctoOrdered, :before_delete, callback_args
     end
+  end
+
+  def select(q, field) do
+    Ecto.Query.select(q, [m], field(m, ^field))
   end
 
   defp validate_position!(cs, field, position, max) when position > max + 1 do
@@ -141,7 +142,7 @@ defmodule EctoOrdered do
   defp validate_position!(cs, _, _, _), do: cs
 
   def before_insert(cs, repo, field, scope) do
-    rows = lock_table(cs, scope) |> repo.all
+    rows = lock_table(cs, scope, field) |> repo.all
     module = cs.model.__struct__
     max = (rows == [] && 0) || Enum.max(rows)
     cond do
@@ -166,7 +167,7 @@ defmodule EctoOrdered do
        |> before_delete(repo, field, scope)
       before_insert(cs, repo, field, scope)
     else
-      rows = lock_table(cs, scope) |> repo.all
+      rows = lock_table(cs, scope, field) |> repo.all
       module = cs.model.__struct__
       max = (rows == [] && 0) || Enum.max(rows)
       cond do
@@ -191,21 +192,21 @@ defmodule EctoOrdered do
   end
 
   def before_delete(cs, repo, field, scope) do
-    rows = lock_table(cs, scope) |> repo.all
+    rows = lock_table(cs, scope, field) |> repo.all
     module = cs.model.__struct__
     max = (rows == [] && 0) || Enum.max(rows)
     module.__ecto_ordered__decrement_position_query__(Map.get(cs.model, field), max, get_field(cs, scope))
     cs
   end
 
-  defp lock_table(cs, scope) do
+  defp lock_table(cs, scope, field) do
     module = cs.model.__struct__
     scope = p[:scope]
     q = from m in module, lock: "FOR UPDATE"
 
     cond do
       is_nil(scope) ->
-        module.__ecto_ordered__select__(q)
+        EctoOrdered.select(q, field)
       is_nil(get_field(cs, scope)) ->
         module.__ecto_ordered__scope_nil_query__(q, scope)
       scoped = get_field(cs, scope) ->
