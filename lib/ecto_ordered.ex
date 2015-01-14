@@ -209,9 +209,9 @@ defmodule EctoOrdered do
     cond do
       is_nil(p[:scope]) ->
         q |> module.__ecto_ordered__select__(p)
-      is_nil(Map.get(cs.model, scope)) ->
+      is_nil(get_field(cs, scope)) ->
         q |> module.__ecto_ordered__scope_nil_query__(p)
-      scoped = Map.get(cs.model, scope) ->
+      scoped = get_field(cs, scope) ->
         q |> module.__ecto_ordered__scope_query__(p, scoped)
     end
   end
