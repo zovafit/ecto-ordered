@@ -254,6 +254,28 @@ defmodule EctoOrderedTest.Scoped do
     assert Repo.get(Model, model2.id).scoped_position == 3
   end
 
+  test "scoped: moving between scopes" do
+    model1 = %Model{scope: 1, title: "item #1"} |> Repo.insert
+    model2 = %Model{scope: 1, title: "item #2"} |> Repo.insert
+    model3 = %Model{scope: 1, title: "item #3"} |> Repo.insert
+
+    xmodel1 = %Model{scope: 2, title: "item #1"} |> Repo.insert
+    xmodel2 = %Model{scope: 2, title: "item #2"} |> Repo.insert
+    xmodel3 = %Model{scope: 2, title: "item #3"} |> Repo.insert
+
+    model2 |> Model.move_scoped_position(4) |> Ecto.Changeset.put_change(:scope, 2) |> Repo.update
+
+    assert Repo.get(Model, model1.id).scoped_position == 1
+    assert Repo.get(Model, model3.id).scoped_position == 2
+
+    assert Repo.get(Model, xmodel1.id).scoped_position == 1
+    assert Repo.get(Model, xmodel2.id).scoped_position == 2
+    assert Repo.get(Model, xmodel3.id).scoped_position == 3
+    assert Repo.get(Model, model2.id).scoped_position == 4
+
+
+  end
+
 
   ## Deletion
 
