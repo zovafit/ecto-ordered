@@ -145,71 +145,78 @@ defmodule EctoOrdered do
     rows = lock_table(cs, scope, field) |> repo.all
     module = cs.model.__struct__
     max = (rows == [] && 0) || Enum.max(rows)
-    cond do
-      is_nil(get_field(cs, field)) ->
-        # Doesn't have a position assigned
-        cs |>
-          put_change(field, max + 1)
-      not is_nil(get_field(cs, field)) ->
-         # Has a position assigned
-         module.__ecto_ordered__increment_position_query__(get_change(cs, field), get_field(cs, scope))
-         validate_position!(cs, field, get_change(cs, field), max)
-      true ->
-        cs
+    position_assigned = get_field(cs, field)
+
+    if position_assigned do
+      new_position = get_change(cs, field)
+      scope_field = get_field(cs, scope)
+      module.__ecto_ordered__increment_position_query__(new_position, scope_field)
+      validate_position!(cs, field, new_position, max)
+    else
+      put_change(cs, field, max + 1)
     end
   end
 
   def before_update(cs, repo, field, scope) do
-    if not is_nil(scope) and not is_nil(get_change(cs, scope))
-       and Map.get(cs.model, scope) != get_change(cs, scope) do
-      cs
-       |> put_change(scope, Map.get(cs.model, scope))
-       |> before_delete(repo, field, scope)
-      before_insert(cs, repo, field, scope)
-    else
-      rows = lock_table(cs, scope, field) |> repo.all
-      module = cs.model.__struct__
-      max = (rows == [] && 0) || Enum.max(rows)
-      cond do
-        Map.has_key?(cs.changes, field) and get_change(cs, field) != Map.get(cs.model, field) and
-        get_change(cs, field) > Map.get(cs.model, field) ->
-          module.__ecto_ordered__decrement_position_query__(Map.get(cs.model, field), get_change(cs, field), get_field(cs, scope))
-          cs = if get_change(cs, field) == max + 1 do
-            cs |> put_change(field, max)
-          else
-            cs
-          end
-          validate_position!(cs, field, get_change(cs, field), max)
-        Map.has_key?(cs.changes, field) and get_change(cs, field) != Map.get(cs.model, field) and
-        get_change(cs, field) < Map.get(cs.model, field) ->
-          module.__ecto_ordered__decrement_position_query__(Map.get(cs.model, field), max, get_field(cs, scope))
-          module.__ecto_ordered__increment_position_query__(get_change(cs, field), get_field(cs, scope))
-          validate_position!(cs, field, get_change(cs, field), max)
-        true ->
-          cs
-      end
-    end
+    new_scope = get_change(cs, scope)
+    scope_value = Map.get(cs.model, scope)
+
+    before_update(cs, repo, field, scope, new_scope, scope_value)
+  end
+  defp before_update(cs, repo, field, scope, new_scope, scope_value)
+      when not is_nil(new_scope) and scope_value != new_scope do
+    cs
+    |> put_change(scope, Map.get(cs.model, scope))
+    |> before_delete(repo, field, scope)
+    before_insert(cs, repo, field, scope)
+  end
+  defp before_update(%{model: %{__struct__: module}} = cs, repo, field, scope, _new_scope, _scope_value) do
+    rows = lock_table(cs, scope, field) |> repo.all
+    max = (rows == [] && 0) || Enum.max(rows)
+    new_position = get_change(cs, field)
+    field_value = Map.get(cs.model, field)
+    scope_field = get_field(cs, scope)
+
+    adjust_position(cs, module, max, field, scope_field, new_position, field_value)
   end
 
-  def before_delete(cs, repo, field, scope) do
-    rows = lock_table(cs, scope, field) |> repo.all
-    module = cs.model.__struct__
-    max = (rows == [] && 0) || Enum.max(rows)
-    module.__ecto_ordered__decrement_position_query__(Map.get(cs.model, field), max, get_field(cs, scope))
+  defp adjust_position(cs, module, max, field, scope_field, new_position, field_value)
+      when new_position > field_value do
+    module.__ecto_ordered__decrement_position_query__(field_value, new_position, scope_field)
+    cs = if new_position == max + 1, do: put_change(cs, field, max), else: cs
+    validate_position!(cs, field, new_position, max)
+  end
+  defp adjust_position(cs, module, max, field, scope_field, new_position, field_value)
+      when new_position < field_value do
+    module.__ecto_ordered__decrement_position_query__(field_value, max, scope_field)
+    module.__ecto_ordered__increment_position_query__(new_position, scope_field)
+    validate_position!(cs, field, new_position, max)
+  end
+  defp adjust_position(cs, _, _, _, _, _, _) do
     cs
   end
 
-  defp lock_table(cs, scope, field) do
-    module = cs.model.__struct__
-    scope = p[:scope]
+  def before_delete(%{model: %{__struct__: module}} = cs, repo, field, scope) do
+    rows = lock_table(cs, scope, field) |> repo.all
+    max = (rows == [] && 0) || Enum.max(rows)
+    field_value = Map.get(cs.model, field)
+    new_scope = get_field(cs, scope)
+
+    module.__ecto_ordered__decrement_position_query__(field_value, max, new_scope)
+    cs
+  end
+
+  defp lock_table(%{model: %{__struct__: module}}, nil, field) do
+    q = from m in module, lock: "FOR UPDATE"
+    EctoOrdered.select(q, field)
+  end
+  defp lock_table(%{model: %{__struct__: module}} = cs, scope, field) do
     q = from m in module, lock: "FOR UPDATE"
 
-    cond do
-      is_nil(scope) ->
-        EctoOrdered.select(q, field)
-      is_nil(get_field(cs, scope)) ->
+    case get_field(cs, scope) do
+      nil ->
         module.__ecto_ordered__scope_nil_query__(q, scope)
-      scoped = get_field(cs, scope) ->
+      scoped ->
         module.__ecto_ordered__scope_query__(q, scoped)
     end
   end
