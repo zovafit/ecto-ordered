@@ -47,55 +47,39 @@ defmodule EctoOrdered do
         [{unquote(field), fragment("? - 1", m.unquote(field))}])
       end
 
-      if unquote(scope) do
-        def __ecto_ordered__increment_position_query__(split_by, nil) do
-          query = Query.from m in __MODULE__,
-                  where: m.unquote(field) >= ^split_by and is_nil(m.unquote(scope))
-          __ecto_ordered__increment__(query)
-        end
+      def __ecto_ordered__increment_position_query__(split_by, nil) do
+        query = Query.from m in __MODULE__,
+                where: m.unquote(field) >= ^split_by
+        __ecto_ordered__increment__(query)
+      end
+      def __ecto_ordered__increment_position_query__(split_by, scope) do
+        query = Query.from m in __MODULE__,
+                where: m.unquote(field) >= ^split_by and m.unquote(scope) == ^scope
+        __ecto_ordered__increment__(query)
+      end
 
-        def __ecto_ordered__increment_position_query__(split_by, scope) do
-          query = Query.from m in __MODULE__,
-                  where: m.unquote(field) >= ^split_by and m.unquote(scope) == ^scope
-          __ecto_ordered__increment__(query)
-        end
+      def __ecto_ordered__decrement_position_query__(split_by, until, nil) do
+        query = Query.from m in __MODULE__,
+                where: m.unquote(field) > ^split_by and m.unquote(field) <= ^until
+        __ecto_ordered__decrement__(query)
+      end
+      def __ecto_ordered__decrement_position_query__(split_by, until, scope) do
+        query = Query.from m in __MODULE__,
+                where: m.unquote(field) > ^split_by and m.unquote(field) <= ^until
+                       and m.unquote(scope) == ^scope
+        __ecto_ordered__decrement__(query)
+      end
 
-        def __ecto_ordered__decrement_position_query__(split_by, until, nil) do
-          query = Query.from m in __MODULE__,
-                  where: m.unquote(field) > ^split_by and m.unquote(field) <= ^until
-                         and is_nil(m.unquote(scope))
-          __ecto_ordered__decrement__(query)
-        end
+      def __ecto_ordered__scope_query__(q, scope) do
+        q
+        |> EctoOrdered.select(unquote(field))
+        |> Query.where([m], m.unquote(scope) == ^scope)
+      end
 
-        def __ecto_ordered__decrement_position_query__(split_by, until, scope) do
-          query = Query.from(m in __MODULE__,
-                  where: m.unquote(field) > ^split_by and m.unquote(field) <= ^until
-                         and m.unquote(scope) == ^scope)
-          __ecto_ordered__decrement__(query)
-        end
-
-        def __ecto_ordered__scope_query__(q, scope) do
-          q
-          |> EctoOrdered.select(unquote(field))
-          |> Query.where([m], m.unquote(scope) == ^scope)
-        end
-
-        def __ecto_ordered__scope_nil_query__(q) do
-          q
-          |> EctoOrdered.select(unquote(field))
-          |> Query.where([m], is_nil(m.unquote(scope)))
-        end
-      else
-        def __ecto_ordered__increment_position_query__(split_by, _scope) do
-          query = Query.from(m in __MODULE__, where: m.unquote(field) >= ^split_by)
-          __ecto_ordered__increment__(query)
-        end
-
-        def __ecto_ordered__decrement_position_query__(split_by, until, _scope) do
-          query = Query.from(m in __MODULE__, where: m.unquote(field) > ^split_by
-                                  and m.unquote(field) <= ^until)
-          __ecto_ordered__decrement__(query)
-        end
+      def __ecto_ordered__scope_nil_query__(q) do
+        q
+        |> EctoOrdered.select(unquote(field))
+        |> Query.where([m], is_nil(m.unquote(scope)))
       end
 
       @doc """
