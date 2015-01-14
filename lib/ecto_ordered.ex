@@ -33,9 +33,7 @@ defmodule EctoOrdered do
     scope = Keyword.get(opts, :scope)
 
     quote location: :keep do
-      require Ecto.Query
       require unquote(repo)
-      alias Ecto.Query
 
       def __ecto_ordered__increment__(query)  do
         unquote(repo).update_all(m in query,
@@ -47,18 +45,6 @@ defmodule EctoOrdered do
         [{unquote(field), fragment("? - 1", m.unquote(field))}])
       end
 
-      def __ecto_ordered__scope_query__(q, scope) do
-        q
-        |> EctoOrdered.select(unquote(field))
-        |> Query.where([m], m.unquote(scope) == ^scope)
-      end
-
-      def __ecto_ordered__scope_nil_query__(q) do
-        q
-        |> EctoOrdered.select(unquote(field))
-        |> Query.where([m], is_nil(m.unquote(scope)))
-      end
-
       @doc """
       Creates a changeset for adjusting the #{unquote(field)} field
       """
@@ -67,8 +53,7 @@ defmodule EctoOrdered do
       end
 
       def changeset(model, unquote(move), params) do
-        params
-        |> cast(model, [unquote(field)], [])
+        cast(params, model, [unquote(field)], [])
       end
 
       @doc """
@@ -200,9 +185,21 @@ defmodule EctoOrdered do
 
     case get_field(cs, scope) do
       nil ->
-        module.__ecto_ordered__scope_nil_query__(q, scope)
-      scoped ->
-        module.__ecto_ordered__scope_query__(q, scoped)
+        scope_nil_query(q, field, scope, nil)
+      scope_value ->
+        scope_query(q, field, scope, scope_value)
     end
+  end
+
+  defp scope_query(q, field, scope, scope_value) do
+    q
+    |> select(field)
+    |> where([m], field(m, ^scope) == ^scope_value)
+  end
+
+  defp scope_nil_query(q, field, scope, nil) do
+    q
+    |> select(field)
+    |> where([m], is_nil(field(m, ^scope)))
   end
 end
