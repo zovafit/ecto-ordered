@@ -157,7 +157,7 @@ defmodule EctoOrdered do
           put_change(field, max + 1)
       not is_nil(get_field(cs, field)) ->
          # Has a position assigned
-         module.__ecto_ordered__increment_position_query__(p, get_change(cs, field), Map.get(cs.model, scope_field))
+         module.__ecto_ordered__increment_position_query__(p, get_change(cs, field), get_field(cs, scope_field))
          validate_position!(cs, field, get_change(cs, field), max)
       true ->
         cs
@@ -174,7 +174,7 @@ defmodule EctoOrdered do
     cond do
       Map.has_key?(cs.changes, field) and get_change(cs, field) != Map.get(cs.model, field) and
       get_change(cs, field) > Map.get(cs.model, field) ->
-        module.__ecto_ordered__decrement_position_query__(p, Map.get(cs.model, field), get_change(cs, field), Map.get(cs.model, scope_field))
+        module.__ecto_ordered__decrement_position_query__(p, Map.get(cs.model, field), get_change(cs, field), get_field(cs, scope_field))
         cs = if get_change(cs, field) == max + 1 do
           cs |> put_change(field, max)
         else
@@ -183,8 +183,8 @@ defmodule EctoOrdered do
         validate_position!(cs, field, get_change(cs, field), max)
       Map.has_key?(cs.changes, field) and get_change(cs, field) != Map.get(cs.model, field) and
       get_change(cs, field) < Map.get(cs.model, field) ->
-        module.__ecto_ordered__decrement_position_query__(p, Map.get(cs.model, field), max, Map.get(cs.model, scope_field))
-        module.__ecto_ordered__increment_position_query__(p, get_change(cs, field), Map.get(cs.model, scope_field))
+        module.__ecto_ordered__decrement_position_query__(p, Map.get(cs.model, field), max, get_field(cs, scope_field))
+        module.__ecto_ordered__increment_position_query__(p, get_change(cs, field), get_field(cs, scope_field))
         validate_position!(cs, field, get_change(cs, field), max)
       true ->
         cs
@@ -198,7 +198,7 @@ defmodule EctoOrdered do
     rows = lock_table(cs, p) |> repo.all
     module = cs.model.__struct__
     max = (rows == [] && 0) || Enum.max(rows)
-    module.__ecto_ordered__decrement_position_query__(p, Map.get(cs.model, field), max, Map.get(cs.model, scope_field))
+    module.__ecto_ordered__decrement_position_query__(p, Map.get(cs.model, field), max, get_field(cs, scope_field))
     cs
   end
 
