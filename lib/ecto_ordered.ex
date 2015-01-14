@@ -173,7 +173,7 @@ defmodule EctoOrdered do
       cs
        |> put_change(scope_field, Map.get(cs.model, scope_field))
        |> before_delete(p)
-       |> put_change(scope_field, get_change(cs, scope_field))
+      cs
        |> before_insert(p)
     else
       rows = lock_table(cs, p) |> repo.all
