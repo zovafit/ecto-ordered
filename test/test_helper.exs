@@ -9,7 +9,7 @@ setup_cmds = [
 
 defmodule EctoOrderedTest.Repo do
   use Ecto.Repo, otp_app: :ecto_ordered,
-  adapter: Ecto.Adapters.Postgres
+                 adapter: Ecto.Adapters.Postgres
 end
 
 Enum.each(setup_cmds, fn(cmd) ->
@@ -56,7 +56,11 @@ defmodule EctoOrdered.TestCase do
     Logger.configure level: :error
     setup_database = [
       "DROP TABLE IF EXISTS model",
-      "CREATE TABLE model (id serial PRIMARY KEY, title varchar(100), scope integer, position integer, scoped_position integer)",
+      "DROP TABLE IF EXISTS scoped_model",
+      "CREATE TABLE model (id serial PRIMARY KEY, title varchar(100), position integer)",
+      "CREATE TABLE scoped_model (id serial PRIMARY KEY, title varchar(100), scope integer,scoped_position integer)",
+      # "ALTER TABLE model ADD CONSTRAINT position_unique UNIQUE (position)",
+      # "ALTER TABLE scoped_model ADD CONSTRAINT scoped_position_unique UNIQUE (scoped_position, scope)",
     ]
 
     {:ok, _pid} = EctoOrderedTest.Repo.start_link

@@ -6,13 +6,10 @@ defmodule EctoOrderedTest do
   defmodule Model do
     use Ecto.Model
     use EctoOrdered, repo: Repo
-    use EctoOrdered, field: :scoped_position, scope: :scope, repo: Repo
 
     schema "model" do
       field :title,            :string
-      field :scope,            :integer
       field :position,         :integer
-      field :scoped_position,  :integer
     end
   end
 
@@ -132,7 +129,24 @@ defmodule EctoOrderedTest do
     assert Repo.get(Model, model5.id).position == 4
   end
 
-  ######## Scope
+end
+
+
+defmodule EctoOrderedTest.Scoped do
+  use EctoOrdered.TestCase
+  alias EctoOrderedTest.Repo
+  import Ecto.Query
+
+  defmodule Model do
+    use Ecto.Model
+    use EctoOrdered, field: :scoped_position, scope: :scope, repo: Repo
+
+    schema "scoped_model" do
+      field :title,            :string
+      field :scope,            :integer
+      field :scoped_position,  :integer
+    end
+  end
 
   # Insertion
 
@@ -143,15 +157,17 @@ defmodule EctoOrderedTest do
     end
     for s <- 1..10 do
       assert (from m in Model, select: m.scoped_position, where: m.scope == ^s) |>
-             Repo.all == Enum.into(1..10, [])
+      Repo.all == Enum.into(1..10, [])
     end
 
   end
 
   test "scoped: inserting item with a correct appending position" do
     %Model{scope: 10, title: "item with no position, going to be #1"} |> Repo.insert
-    %Model{scope: 11, title: "item #2", position: 2} |> Repo.insert
-    model = %Model{scope: 10, title: "item #2", position: 2} |> Repo.insert
+    %Model{scope: 11, title: "item #2"} |> Repo.insert
+
+    model = %Model{scope: 10, title: "item #2", scoped_position: 2} |> Repo.insert
+
     assert model.scoped_position == 2
   end
 
@@ -166,7 +182,9 @@ defmodule EctoOrderedTest do
     model1 = %Model{scope: 1, title: "item with no position, going to be #1"} |> Repo.insert
     model2 = %Model{scope: 1, title: "item with no position, going to be #2"} |> Repo.insert
     model3 = %Model{scope: 1, title: "item with no position, going to be #3"} |> Repo.insert
+
     model = %Model{scope: 1,  title: "item #2", scoped_position: 2} |> Repo.insert
+
     assert model.scoped_position == 2
     assert Repo.get(Model, model1.id).scoped_position == 1
     assert Repo.get(Model, model2.id).scoped_position == 3
