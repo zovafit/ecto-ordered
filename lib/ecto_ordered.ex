@@ -19,6 +19,7 @@ defmodule EctoOrdered do
             field_value:  nil,
             move:         :move_position,
             scope:        nil,
+            scope_change: nil,
             scope_value:  nil,
             new_position: nil,
             max:          nil
@@ -84,11 +85,21 @@ defmodule EctoOrdered do
       "#{inspect caller.module}.#{to_string(opts[:field])}"
     end
 
+    opts = Keyword.put(opts, :repo, Macro.expand(repo, caller))
     if field = opts[:field] do
       opts = [{:move, :"move_#{field}"}|opts]
     end
 
     struct(Order, opts)
+  end
+
+  def update_scope(%Order{scope: scope} = struct, cs) do
+    scope_change = get_change(cs, scope)
+    new_scope = Map.get(cs.model, scope)
+
+    struct
+    |> Map.put(:scope_change, scope_change)
+    |> Map.put(:scope_value, new_scope)
   end
 
   def select(q, field) do
@@ -143,44 +154,46 @@ defmodule EctoOrdered do
     end
   end
 
-  def before_update(cs, %{scope: scope, field: field, repo: repo}) do
-    new_scope = get_change(cs, scope)
-    scope_value = Map.get(cs.model, scope)
-
-    before_update(cs, repo, field, scope, new_scope, scope_value)
+  def before_update(cs, %{scope: scope, field: field, repo: repo} = struct) do
+    struct
+    |> update_scope(cs)
+    |> reorder_model(cs)
   end
-  defp before_update(cs, repo, field, scope, new_scope, scope_value)
-      when not is_nil(new_scope) and scope_value != new_scope do
+  defp reorder_model(%Order{repo: repo, field: field, scope: scope, scope_change: scope_change, scope_value: scope_value}, cs)
+      when not is_nil(scope_change) and scope_value != scope_change do
     cs
     |> put_change(scope, scope_value)
     |> before_delete(repo, field, scope)
     before_insert(cs, repo, field, scope)
   end
-  defp before_update(%{model: %{__struct__: module}} = cs, repo, field, scope, _new_scope, _scope_value) do
+  defp reorder_model(%Order{repo: repo, field: field, scope: scope}, cs) do
     rows = lock_table(cs, scope, field) |> repo.all
     max = (rows == [] && 0) || Enum.max(rows)
     new_position = get_change(cs, field)
     field_value = Map.get(cs.model, field)
 
-    adjust_position(cs, module, max, field, scope, new_position, field_value)
+    adjust_position(cs, max, field, scope, new_position, field_value)
   end
 
-  defp adjust_position(cs, module, max, field, scope, new_position, field_value)
+  defp adjust_position(cs, max, field, scope, new_position, field_value)
       when new_position > field_value do
     scope_value = get_field(cs, scope)
+    module = cs.model.__struct__
+
     decrement_position(module, field, scope, field_value, new_position, scope_value)
     cs = if new_position == max + 1, do: put_change(cs, field, max), else: cs
     validate_position!(cs, field, new_position, max)
   end
-  defp adjust_position(cs, module, max, field, scope, new_position, field_value)
+  defp adjust_position(cs, max, field, scope, new_position, field_value)
       when new_position < field_value do
     scope_value = get_field(cs, scope)
+    module = cs.model.__struct__
 
     decrement_position(module, field, scope, field_value, max, scope_value)
     increment_position(module, field, scope, new_position, scope_value)
     validate_position!(cs, field, new_position, max)
   end
-  defp adjust_position(cs, _, _, _, _, _, _) do
+  defp adjust_position(cs, _, _, _, _, _) do
     cs
   end
 
