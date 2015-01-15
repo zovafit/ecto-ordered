@@ -16,12 +16,13 @@ defmodule EctoOrdered do
   defstruct repo:         nil,
             module:       nil,
             field:        :position,
-            field_value:  nil,
+            new_position: nil,
+            old_position: nil,
             move:         :move_position,
             scope:        nil,
-            scope_change: nil,
-            scope_value:  nil,
-            new_position: nil,
+            old_scope:    nil,
+            new_scope:    nil,
+            until:        nil,
             max:          nil
 
   defmodule InvalidMove do
@@ -74,11 +75,11 @@ defmodule EctoOrdered do
 
       before_insert EctoOrdered, :before_insert, callback_args
       before_update EctoOrdered, :before_update, [unquote(struct)]
-      before_delete EctoOrdered, :before_delete, callback_args
+      before_delete EctoOrdered, :before_delete, [unquote(struct)]
     end
   end
 
-  def build(opts, caller) do
+  defp build(opts, caller) do
     unless repo = opts[:repo] do
       raise ArgumentError, message:
       "EctoOrdered requires :repo to be specified for " <>
@@ -93,17 +94,13 @@ defmodule EctoOrdered do
     struct(Order, opts)
   end
 
-  def update_scope(%Order{scope: scope} = struct, cs) do
-    scope_change = get_change(cs, scope)
+  defp update_scope(%Order{scope: scope} = struct, cs) do
+    old_scope = get_change(cs, scope)
     new_scope = Map.get(cs.model, scope)
 
     struct
-    |> Map.put(:scope_change, scope_change)
-    |> Map.put(:scope_value, new_scope)
-  end
-
-  def select(q, field) do
-    Ecto.Query.select(q, [m], field(m, ^field))
+    |> Map.put(:old_scope, old_scope)
+    |> Map.put(:new_scope, new_scope)
   end
 
   def increment_position(module, field, _scope, split_by, nil) do
@@ -111,21 +108,21 @@ defmodule EctoOrdered do
             where: field(m, ^field) >= ^split_by
     module.__ecto_ordered__increment__(query)
   end
-  def increment_position(module, field, scope, split_by, scope_value) do
+  def increment_position(module, field, scope, split_by, new_scope) do
     query = from m in module,
-            where: field(m, ^field) >= ^split_by and field(m, ^scope) == ^scope_value
+            where: field(m, ^field) >= ^split_by and field(m, ^scope) == ^new_scope
     module.__ecto_ordered__increment__(query)
   end
 
-  def decrement_position(module, field, _scope, split_by, until, nil) do
+  def decrement_position(module, %Order{field: field, old_position: split_by, until: until, scope: nil}) do
     query = from m in module,
             where: field(m, ^field) > ^split_by and field(m, ^field) <= ^until
     module.__ecto_ordered__decrement__(query)
   end
-  def decrement_position(module, field, scope, split_by, until, scope_value) do
+  def decrement_position(module, %Order{field: field, scope: scope, old_position: split_by, until: until, new_scope: new_scope}) do
     query = from m in module,
             where: field(m, ^field) > ^split_by and field(m, ^field) <= ^until
-                   and field(m, ^scope) == ^scope_value
+                   and field(m, ^scope) == ^new_scope
     module.__ecto_ordered__decrement__(query)
   end
 
@@ -146,64 +143,68 @@ defmodule EctoOrdered do
 
     if position_assigned do
       new_position = get_change(cs, field)
-      scope_value = get_field(cs, scope)
-      increment_position(module, field, scope, new_position, scope_value)
+      new_scope = get_field(cs, scope)
+      increment_position(module, field, scope, new_position, new_scope)
       validate_position!(cs, field, new_position, max)
     else
       put_change(cs, field, max + 1)
     end
   end
 
-  def before_update(cs, %{scope: scope, field: field, repo: repo} = struct) do
+  def before_update(cs, struct) do
     struct
     |> update_scope(cs)
     |> reorder_model(cs)
   end
-  defp reorder_model(%Order{repo: repo, field: field, scope: scope, scope_change: scope_change, scope_value: scope_value}, cs)
-      when not is_nil(scope_change) and scope_value != scope_change do
+
+  defp reorder_model(%Order{repo: repo, field: field, scope: scope, old_scope: old_scope, new_scope: new_scope} = struct, cs)
+      when not is_nil(old_scope) and new_scope != old_scope do
     cs
-    |> put_change(scope, scope_value)
-    |> before_delete(repo, field, scope)
+    |> put_change(scope, new_scope)
+    |> before_delete(struct)
     before_insert(cs, repo, field, scope)
   end
-  defp reorder_model(%Order{repo: repo, field: field, scope: scope}, cs) do
+  defp reorder_model(%Order{repo: repo, field: field, scope: scope} = struct, cs) do
     rows = lock_table(cs, scope, field) |> repo.all
     max = (rows == [] && 0) || Enum.max(rows)
     new_position = get_change(cs, field)
-    field_value = Map.get(cs.model, field)
+    old_position = Map.get(cs.model, field)
 
-    adjust_position(cs, max, field, scope, new_position, field_value)
+    struct = %{struct | old_position: old_position, new_position: new_position, max: max}
+    adjust_position(struct, cs)
   end
 
-  defp adjust_position(cs, max, field, scope, new_position, field_value)
-      when new_position > field_value do
-    scope_value = get_field(cs, scope)
+  defp adjust_position(%Order{max: max, field: field, new_position: new_position, old_position: old_position} = struct, cs)
+      when new_position > old_position do
     module = cs.model.__struct__
+    struct = %{struct|until: new_position}
 
-    decrement_position(module, field, scope, field_value, new_position, scope_value)
+    decrement_position(module, struct)
     cs = if new_position == max + 1, do: put_change(cs, field, max), else: cs
     validate_position!(cs, field, new_position, max)
   end
-  defp adjust_position(cs, max, field, scope, new_position, field_value)
-      when new_position < field_value do
-    scope_value = get_field(cs, scope)
+  defp adjust_position(%Order{max: max, field: field, scope: scope, new_position: new_position, old_position: old_position} = struct, cs)
+      when new_position < old_position do
+    new_scope = get_field(cs, scope)
     module = cs.model.__struct__
+    struct = %{struct|until: max}
 
-    decrement_position(module, field, scope, field_value, max, scope_value)
-    increment_position(module, field, scope, new_position, scope_value)
+    decrement_position(module, struct)
+    increment_position(module, field, scope, new_position, new_scope)
     validate_position!(cs, field, new_position, max)
   end
-  defp adjust_position(cs, _, _, _, _, _) do
+  defp adjust_position(_struct, cs) do
     cs
   end
 
-  def before_delete(%{model: %{__struct__: module}} = cs, repo, field, scope) do
+  def before_delete(cs, %Order{repo: repo, field: field, scope: scope} = struct) do
     rows = lock_table(cs, scope, field) |> repo.all
     max = (rows == [] && 0) || Enum.max(rows)
-    field_value = Map.get(cs.model, field)
+    old_position = Map.get(cs.model, field)
     new_scope = get_field(cs, scope)
+    struct = %{struct|until: max, old_position: old_position, new_scope: new_scope}
 
-    decrement_position(module, field, scope, field_value, max, new_scope)
+    decrement_position(cs.model.__struct__, struct)
     cs
   end
 
@@ -214,23 +215,22 @@ defmodule EctoOrdered do
   defp lock_table(%{model: %{__struct__: module}} = cs, scope, _field) do
     q = from m in module, lock: "FOR UPDATE"
 
-    case get_field(cs, scope) do
-      nil ->
-        scope_nil_query(q, field, scope, nil)
-      scope_value ->
-        scope_query(q, field, scope, scope_value)
-    end
+    new_scope = get_field(cs, scope)
+    scope_query(q, field, scope, new_scope)
   end
 
-  defp scope_query(q, field, scope, scope_value) do
-    q
-    |> select(field)
-    |> where([m], field(m, ^scope) == ^scope_value)
+  defp select(q, field) do
+    Ecto.Query.select(q, [m], field(m, ^field))
   end
 
-  defp scope_nil_query(q, field, scope, nil) do
+  defp scope_query(q, field, scope, nil) do
     q
     |> select(field)
     |> where([m], is_nil(field(m, ^scope)))
+  end
+  defp scope_query(q, field, scope, new_scope) do
+    q
+    |> select(field)
+    |> where([m], field(m, ^scope) == ^new_scope)
   end
 end
