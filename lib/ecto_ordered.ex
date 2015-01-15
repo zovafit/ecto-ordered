@@ -13,8 +13,15 @@ defmodule EctoOrdered do
 
   """
 
-  import Ecto.Query
-  import Ecto.Changeset
+  defstruct repo:         nil,
+            module:       nil,
+            field:        :position,
+            field_value:  nil,
+            move:         :move_position,
+            scope:        nil,
+            scope_value:  nil,
+            new_position: nil,
+            max:          nil
 
   defmodule InvalidMove do
     defexception type: nil
@@ -22,17 +29,16 @@ defmodule EctoOrdered do
     def message(%__MODULE__{type: :too_small}), do: "too small"
   end
 
+  import Ecto.Query
+  import Ecto.Changeset
+  alias EctoOrdered, as: Order
+
   defmacro __using__(opts \\ []) do
-    unless repo = opts[:repo] do
-      raise ArgumentError, message:
-      "EctoOrdered requires :repo to be specified for " <>
-      "#{inspect __CALLER__.module}.#{to_string(opts[:field])}"
-    end
-    field = Keyword.get(opts, :field, :position)
-    move = :"move_#{field}"
-    scope = Keyword.get(opts, :scope)
+    struct = %{repo: repo, field: field, scope: scope, move: move} = build(opts, __CALLER__)
+    struct = Macro.escape(struct)
 
     quote location: :keep do
+      field = unquote(field)
       require unquote(repo)
 
       def __ecto_ordered__increment__(query)  do
@@ -46,54 +52,66 @@ defmodule EctoOrdered do
       end
 
       @doc """
-      Creates a changeset for adjusting the #{unquote(field)} field
+      Creates a changeset for adjusting the #{field} field
       """
       def changeset(model, unquote(move)) do
         changeset(model, unquote(move), nil)
       end
-
       def changeset(model, unquote(move), params) do
         cast(params, model, [unquote(field)], [])
       end
 
       @doc """
-      Creates a changeset with an adjusted #{unquote(field)} field
+      Creates a changeset with an adjusted #{field} field
       """
       def unquote(move)(model, new_position) do
-        cs = model
-             |> change([{unquote(field), new_position}])
+        cs = change(model, [{unquote(field), new_position}])
         %Ecto.Changeset{cs | valid?: true}
       end
 
-      callback_args = [unquote(repo), unquote(field), unquote(scope)]
+      callback_args = [unquote(repo), field, unquote(scope)]
 
       before_insert EctoOrdered, :before_insert, callback_args
-      before_update EctoOrdered, :before_update, callback_args
+      before_update EctoOrdered, :before_update, [unquote(struct)]
       before_delete EctoOrdered, :before_delete, callback_args
     end
+  end
+
+  def build(opts, caller) do
+    unless repo = opts[:repo] do
+      raise ArgumentError, message:
+      "EctoOrdered requires :repo to be specified for " <>
+      "#{inspect caller.module}.#{to_string(opts[:field])}"
+    end
+
+    if field = opts[:field] do
+      opts = [{:move, :"move_#{field}"}|opts]
+    end
+
+    struct(Order, opts)
   end
 
   def select(q, field) do
     Ecto.Query.select(q, [m], field(m, ^field))
   end
 
-  def increment_position_query(module, field, _scope, split_by, nil) do
+  def increment_position(module, field, _scope, split_by, nil) do
     query = from m in module,
             where: field(m, ^field) >= ^split_by
     module.__ecto_ordered__increment__(query)
   end
-  def increment_position_query(module, field, scope, split_by, scope_value) do
+  def increment_position(module, field, scope, split_by, scope_value) do
     query = from m in module,
             where: field(m, ^field) >= ^split_by and field(m, ^scope) == ^scope_value
     module.__ecto_ordered__increment__(query)
   end
 
-  def decrement_position_query(module, field, _scope, split_by, until, nil) do
+  def decrement_position(module, field, _scope, split_by, until, nil) do
     query = from m in module,
             where: field(m, ^field) > ^split_by and field(m, ^field) <= ^until
     module.__ecto_ordered__decrement__(query)
   end
-  def decrement_position_query(module, field, scope, split_by, until, scope_value) do
+  def decrement_position(module, field, scope, split_by, until, scope_value) do
     query = from m in module,
             where: field(m, ^field) > ^split_by and field(m, ^field) <= ^until
                    and field(m, ^scope) == ^scope_value
@@ -118,14 +136,14 @@ defmodule EctoOrdered do
     if position_assigned do
       new_position = get_change(cs, field)
       scope_value = get_field(cs, scope)
-      EctoOrdered.increment_position_query(module, field, scope, new_position, scope_value)
+      increment_position(module, field, scope, new_position, scope_value)
       validate_position!(cs, field, new_position, max)
     else
       put_change(cs, field, max + 1)
     end
   end
 
-  def before_update(cs, repo, field, scope) do
+  def before_update(cs, %{scope: scope, field: field, repo: repo}) do
     new_scope = get_change(cs, scope)
     scope_value = Map.get(cs.model, scope)
 
@@ -134,7 +152,7 @@ defmodule EctoOrdered do
   defp before_update(cs, repo, field, scope, new_scope, scope_value)
       when not is_nil(new_scope) and scope_value != new_scope do
     cs
-    |> put_change(scope, Map.get(cs.model, scope))
+    |> put_change(scope, scope_value)
     |> before_delete(repo, field, scope)
     before_insert(cs, repo, field, scope)
   end
@@ -150,7 +168,7 @@ defmodule EctoOrdered do
   defp adjust_position(cs, module, max, field, scope, new_position, field_value)
       when new_position > field_value do
     scope_value = get_field(cs, scope)
-    decrement_position_query(module, field, scope, field_value, new_position, scope_value)
+    decrement_position(module, field, scope, field_value, new_position, scope_value)
     cs = if new_position == max + 1, do: put_change(cs, field, max), else: cs
     validate_position!(cs, field, new_position, max)
   end
@@ -158,8 +176,8 @@ defmodule EctoOrdered do
       when new_position < field_value do
     scope_value = get_field(cs, scope)
 
-    decrement_position_query(module, field, scope, field_value, max, scope_value)
-    increment_position_query(module, field, scope, new_position, scope_value)
+    decrement_position(module, field, scope, field_value, max, scope_value)
+    increment_position(module, field, scope, new_position, scope_value)
     validate_position!(cs, field, new_position, max)
   end
   defp adjust_position(cs, _, _, _, _, _, _) do
@@ -172,7 +190,7 @@ defmodule EctoOrdered do
     field_value = Map.get(cs.model, field)
     new_scope = get_field(cs, scope)
 
-    decrement_position_query(module, field, scope, field_value, max, new_scope)
+    decrement_position(module, field, scope, field_value, max, new_scope)
     cs
   end
 

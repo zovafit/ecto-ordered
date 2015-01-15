@@ -277,7 +277,6 @@ defmodule EctoOrderedTest.Scoped do
     assert Repo.get(Model, model2.id).scope == 2
   end
 
-
   ## Deletion
 
   test "scoped: deleting an item" do
@@ -293,5 +292,12 @@ defmodule EctoOrderedTest.Scoped do
     assert Repo.get(Model, model3.id).scoped_position == 2
     assert Repo.get(Model, model4.id).scoped_position == 3
     assert Repo.get(Model, model5.id).scoped_position == 4
+  end
+
+  ## Building struct
+
+  test "build/1" do
+    struct = EctoOrdered.build([repo: Repo], %Macro.Env{module: Model})
+    assert struct == %EctoOrdered{repo: FullRepo}
   end
 end
