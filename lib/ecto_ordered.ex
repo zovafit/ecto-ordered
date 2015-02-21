@@ -214,7 +214,7 @@ defmodule EctoOrdered do
   defp lock_table(cs, p) do
     module = cs.model.__struct__
     scope = p[:scope]
-    q = from m in module, lock: true
+    q = from m in module, lock: "FOR UPDATE"
     cond do
       is_nil(p[:scope]) ->
         q |> module.__ecto_ordered__select__(p)

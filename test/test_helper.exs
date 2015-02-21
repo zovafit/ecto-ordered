@@ -1,5 +1,4 @@
 Logger.configure level: :debug
-alias Ecto.Adapters.Postgres
 Application.put_env(:ecto_ordered, EctoOrderedTest.Repo, url: "ecto://postgres:postgres@localhost/ecto_ordered_test")
 
 setup_cmds = [
@@ -66,7 +65,7 @@ defmodule EctoOrdered.TestCase do
     {:ok, _pid} = EctoOrderedTest.Repo.start_link
 
     Enum.each(setup_database, fn(sql) ->
-      result = Postgres.query(EctoOrderedTest.Repo, sql, [])
+      result = Ecto.Adapters.SQL.query(EctoOrderedTest.Repo, sql, [])
       if match?({:error, _}, result) do
         IO.puts("Test database setup SQL error'd: `#{sql}`")
         IO.inspect(result)
