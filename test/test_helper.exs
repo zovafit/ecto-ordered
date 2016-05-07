@@ -30,7 +30,7 @@ end
 
 EctoOrderedTest.Repo.start_link
 _ = Ecto.Migrator.up(EctoOrderedTest.Repo, 0, EctoOrderedTest.Migrations)
-Ecto.Adapters.SQL.begin_test_transaction(EctoOrderedTest.Repo)
+Ecto.Adapters.SQL.Sandbox.mode(EctoOrderedTest.Repo, :manual)
 
 ExUnit.configure(exclude: [skip: true])
 ExUnit.start()

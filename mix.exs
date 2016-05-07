@@ -14,7 +14,16 @@ defmodule EctoOrdered.Mixfile do
   #
   # Type `mix help compile.app` for more information
   def application do
-    [applications: [:logger, :ecto]]
+    [applications: [:logger] ++ app_list(Mix.env)]
+  end
+
+
+  defp app_list(:test) do
+    [:ecto, :postgrex]
+  end
+
+  defp app_list(_) do
+    [:ecto]
   end
 
   # Dependencies can be Hex packages:
@@ -28,7 +37,7 @@ defmodule EctoOrdered.Mixfile do
   # Type `mix help deps` for more examples and options
   defp deps do
     [
-     {:ecto, "~> 1.1"},
+     {:ecto, "~> 2.0.0-rc4"},
      {:postgrex, "~> 0.11.0", only: :test},
     ]
   end
