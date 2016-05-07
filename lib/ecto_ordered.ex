@@ -44,13 +44,13 @@ defmodule EctoOrdered do
       require unquote(repo)
 
       def __ecto_ordered__increment__(query)  do
-        unquote(repo).update_all(m in query,
-        [{unquote(field), fragment("? + 1", m.unquote(field))}])
+        query
+        |> unquote(repo).update_all([inc: [{unquote(field), 1}]])
       end
 
       def __ecto_ordered__decrement__(query)  do
-        unquote(repo).update_all(m in query,
-        [{unquote(field), fragment("? - 1", m.unquote(field))}])
+        query
+        |> unquote(repo).update_all([inc: [{unquote(field), -1}]])
       end
 
       @doc """
@@ -216,25 +216,26 @@ defmodule EctoOrdered do
   end
 
   defp lock_table(%Order{module: module, field: field, scope: nil}, _cs) do
-    from(m in module, lock: "FOR UPDATE") |> select(field)
+    from(m in module, lock: "FOR UPDATE") |> selector(field)
   end
   defp lock_table(%Order{module: module, field: field, scope: scope}, cs) do
     new_scope = get_field(cs, scope)
     from(m in module, lock: "FOR UPDATE") |> scope_query(field, scope, new_scope)
   end
 
-  defp select(q, field) do
+  defp selector(q, field) do
     Ecto.Query.select(q, [m], field(m, ^field))
   end
 
   defp scope_query(q, field, scope, nil) do
     q
-    |> select(field)
+    |> selector(field)
     |> where([m], is_nil(field(m, ^scope)))
   end
+
   defp scope_query(q, field, scope, new_scope) do
     q
-    |> select(field)
+    |> selector(field)
     |> where([m], field(m, ^scope) == ^new_scope)
   end
 end

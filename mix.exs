@@ -28,8 +28,8 @@ defmodule EctoOrdered.Mixfile do
   # Type `mix help deps` for more examples and options
   defp deps do
     [
-     {:ecto, "~> 0.8.1"},
-     {:postgrex, "~> 0.7.0", only: :test},
+     {:ecto, "~> 1.1"},
+     {:postgrex, "~> 0.11.0", only: :test},
     ]
   end
 

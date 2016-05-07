@@ -13,13 +13,18 @@ defmodule EctoOrderedTest do
     end
   end
 
+  setup do
+    Ecto.Adapters.SQL.restart_test_transaction(EctoOrderedTest.Repo)
+  end
+
+
   # No scope
 
   ## Inserting
 
   test "inserting item with no position" do
     for i <- 1..10 do
-      model = %Model{title: "item with no position, going to be ##{i}"} |> Repo.insert
+      model = %Model{title: "item with no position, going to be ##{i}"} |> Repo.insert!
       assert model.position == i
     end
     assert (from m in Model, select: m.position) |> Repo.all == Enum.into(1..10, [])
@@ -27,7 +32,7 @@ defmodule EctoOrderedTest do
 
   test "inserting item with a correct appending position" do
     %Model{title: "item with no position, going to be #1"} |> Repo.insert
-    model = %Model{title: "item #2", position: 2} |> Repo.insert
+    model = %Model{title: "item #2", position: 2} |> Repo.insert!
     assert model.position == 2
   end
 
@@ -39,10 +44,10 @@ defmodule EctoOrderedTest do
   end
 
   test "inserting item with an inserting position" do
-    model1 = %Model{title: "item with no position, going to be #1"} |> Repo.insert
-    model2 = %Model{title: "item with no position, going to be #2"} |> Repo.insert
-    model3 = %Model{title: "item with no position, going to be #3"} |> Repo.insert
-    model = %Model{title: "item #2", position: 2} |> Repo.insert
+    model1 = %Model{title: "item with no position, going to be #1"} |> Repo.insert!
+    model2 = %Model{title: "item with no position, going to be #2"} |> Repo.insert!
+    model3 = %Model{title: "item with no position, going to be #3"} |> Repo.insert!
+    model = %Model{title: "item #2", position: 2} |> Repo.insert!
     assert model.position == 2
     assert Repo.get(Model, model1.id).position == 1
     assert Repo.get(Model, model2.id).position == 3
@@ -50,10 +55,10 @@ defmodule EctoOrderedTest do
   end
 
   test "inserting item with an inserting position at #1" do
-    model1 = %Model{title: "item with no position, going to be #1"} |> Repo.insert
-    model2 = %Model{title: "item with no position, going to be #2"} |> Repo.insert
-    model3 = %Model{title: "item with no position, going to be #3"} |> Repo.insert
-    model = %Model{title: "item #1", position: 1} |> Repo.insert
+    model1 = %Model{title: "item with no position, going to be #1"} |> Repo.insert!
+    model2 = %Model{title: "item with no position, going to be #2"} |> Repo.insert!
+    model3 = %Model{title: "item with no position, going to be #3"} |> Repo.insert!
+    model = %Model{title: "item #1", position: 1} |> Repo.insert!
     assert model.position == 1
     assert Repo.get(Model, model1.id).position == 2
     assert Repo.get(Model, model2.id).position == 3
@@ -63,17 +68,17 @@ defmodule EctoOrderedTest do
   ## Moving
 
   test "updating item with the same position" do
-    model = %Model{title: "item with no position"} |> Repo.insert
-    model1 = %Model{model | title: "item with a position"} |> Repo.update
+    model = %Model{title: "item with no position"} |> Repo.insert!
+    model1 = %Model{model | title: "item with a position"} |> Repo.update!
     assert model.position == model1.position
   end
 
   test "replacing an item below" do
-    model1 = %Model{title: "item #1"} |> Repo.insert
-    model2 = %Model{title: "item #2"} |> Repo.insert
-    model3 = %Model{title: "item #3"} |> Repo.insert
-    model4 = %Model{title: "item #4"} |> Repo.insert
-    model5 = %Model{title: "item #5"} |> Repo.insert
+    model1 = %Model{title: "item #1"} |> Repo.insert!
+    model2 = %Model{title: "item #2"} |> Repo.insert!
+    model3 = %Model{title: "item #3"} |> Repo.insert!
+    model4 = %Model{title: "item #4"} |> Repo.insert!
+    model5 = %Model{title: "item #5"} |> Repo.insert!
 
     model2 |> Model.move_position(4) |> Repo.update
 
@@ -85,11 +90,11 @@ defmodule EctoOrderedTest do
   end
 
   test "replacing an item above" do
-    model1 = %Model{title: "item #1"} |> Repo.insert
-    model2 = %Model{title: "item #2"} |> Repo.insert
-    model3 = %Model{title: "item #3"} |> Repo.insert
-    model4 = %Model{title: "item #4"} |> Repo.insert
-    model5 = %Model{title: "item #5"} |> Repo.insert
+    model1 = %Model{title: "item #1"} |> Repo.insert!
+    model2 = %Model{title: "item #2"} |> Repo.insert!
+    model3 = %Model{title: "item #3"} |> Repo.insert!
+    model4 = %Model{title: "item #4"} |> Repo.insert!
+    model5 = %Model{title: "item #5"} |> Repo.insert!
 
     model4 |> Model.move_position(2) |> Repo.update
 
@@ -101,9 +106,9 @@ defmodule EctoOrderedTest do
   end
 
   test "updating item with a tail position" do
-    model1 = %Model{title: "item #1"} |> Repo.insert
-    model2 = %Model{title: "item #2"} |> Repo.insert
-    model3 = %Model{title: "item #3"} |> Repo.insert
+    model1 = %Model{title: "item #1"} |> Repo.insert!
+    model2 = %Model{title: "item #2"} |> Repo.insert!
+    model3 = %Model{title: "item #3"} |> Repo.insert!
 
     model2 |> Model.move_position(4) |> Repo.update
 
@@ -115,11 +120,11 @@ defmodule EctoOrderedTest do
   ## Deletion
 
   test "deleting an item" do
-    model1 = %Model{title: "item #1"} |> Repo.insert
-    model2 = %Model{title: "item #2"} |> Repo.insert
-    model3 = %Model{title: "item #3"} |> Repo.insert
-    model4 = %Model{title: "item #4"} |> Repo.insert
-    model5 = %Model{title: "item #5"} |> Repo.insert
+    model1 = %Model{title: "item #1"} |> Repo.insert!
+    model2 = %Model{title: "item #2"} |> Repo.insert!
+    model3 = %Model{title: "item #3"} |> Repo.insert!
+    model4 = %Model{title: "item #4"} |> Repo.insert!
+    model5 = %Model{title: "item #5"} |> Repo.insert!
 
     model2 |> Repo.delete
 
@@ -148,11 +153,14 @@ defmodule EctoOrderedTest.Scoped do
     end
   end
 
+  setup do
+    Ecto.Adapters.SQL.restart_test_transaction(EctoOrderedTest.Repo)
+  end
   # Insertion
 
   test "scoped: inserting item with no position" do
     for s <- 1..10, i <- 1..10 do
-      model = %Model{scope: s, title: "item with no position, going to be ##{i}"} |> Repo.insert
+      model = %Model{scope: s, title: "item with no position, going to be ##{i}"} |> Repo.insert!
       assert model.scoped_position == i
     end
     for s <- 1..10 do
@@ -166,7 +174,7 @@ defmodule EctoOrderedTest.Scoped do
     %Model{scope: 10, title: "item with no position, going to be #1"} |> Repo.insert
     %Model{scope: 11, title: "item #2"} |> Repo.insert
 
-    model = %Model{scope: 10, title: "item #2", scoped_position: 2} |> Repo.insert
+    model = %Model{scope: 10, title: "item #2", scoped_position: 2} |> Repo.insert!
 
     assert model.scoped_position == 2
   end
@@ -179,11 +187,11 @@ defmodule EctoOrderedTest.Scoped do
   end
 
   test "scoped: inserting item with an inserting position" do
-    model1 = %Model{scope: 1, title: "item with no position, going to be #1"} |> Repo.insert
-    model2 = %Model{scope: 1, title: "item with no position, going to be #2"} |> Repo.insert
-    model3 = %Model{scope: 1, title: "item with no position, going to be #3"} |> Repo.insert
+    model1 = %Model{scope: 1, title: "item with no position, going to be #1"} |> Repo.insert!
+    model2 = %Model{scope: 1, title: "item with no position, going to be #2"} |> Repo.insert!
+    model3 = %Model{scope: 1, title: "item with no position, going to be #3"} |> Repo.insert!
 
-    model = %Model{scope: 1,  title: "item #2", scoped_position: 2} |> Repo.insert
+    model = %Model{scope: 1,  title: "item #2", scoped_position: 2} |> Repo.insert!
 
     assert model.scoped_position == 2
     assert Repo.get(Model, model1.id).scoped_position == 1
@@ -192,10 +200,10 @@ defmodule EctoOrderedTest.Scoped do
   end
 
   test "scoped: inserting item with an inserting position at #1" do
-    model1 = %Model{scope: 1, title: "item with no position, going to be #1"} |> Repo.insert
-    model2 = %Model{scope: 1, title: "item with no position, going to be #2"} |> Repo.insert
-    model3 = %Model{scope: 1, title: "item with no position, going to be #3"} |> Repo.insert
-    model = %Model{scope: 1, title: "item #1", scoped_position: 1} |> Repo.insert
+    model1 = %Model{scope: 1, title: "item with no position, going to be #1"} |> Repo.insert!
+    model2 = %Model{scope: 1, title: "item with no position, going to be #2"} |> Repo.insert!
+    model3 = %Model{scope: 1, title: "item with no position, going to be #3"} |> Repo.insert!
+    model = %Model{scope: 1, title: "item #1", scoped_position: 1} |> Repo.insert!
     assert model.scoped_position == 1
     assert Repo.get(Model, model1.id).scoped_position == 2
     assert Repo.get(Model, model2.id).scoped_position == 3
@@ -205,17 +213,17 @@ defmodule EctoOrderedTest.Scoped do
   ## Moving
 
   test "scoped: updating item with the same position" do
-    model = %Model{scope: 1, title: "item with no position"} |> Repo.insert
-    model1 = %Model{model | title: "item with a position", scope: 1} |> Repo.update
+    model = %Model{scope: 1, title: "item with no position"} |> Repo.insert!
+    model1 = %Model{model | title: "item with a position", scope: 1} |> Repo.update!
     assert model.scoped_position == model1.scoped_position
   end
 
   test "scoped: replacing an item below" do
-    model1 = %Model{scope: 1, title: "item #1"} |> Repo.insert
-    model2 = %Model{scope: 1, title: "item #2"} |> Repo.insert
-    model3 = %Model{scope: 1, title: "item #3"} |> Repo.insert
-    model4 = %Model{scope: 1, title: "item #4"} |> Repo.insert
-    model5 = %Model{scope: 1, title: "item #5"} |> Repo.insert
+    model1 = %Model{scope: 1, title: "item #1"} |> Repo.insert!
+    model2 = %Model{scope: 1, title: "item #2"} |> Repo.insert!
+    model3 = %Model{scope: 1, title: "item #3"} |> Repo.insert!
+    model4 = %Model{scope: 1, title: "item #4"} |> Repo.insert!
+    model5 = %Model{scope: 1, title: "item #5"} |> Repo.insert!
 
     model2 |> Model.move_scoped_position(4) |> Repo.update
 
@@ -227,11 +235,11 @@ defmodule EctoOrderedTest.Scoped do
   end
 
   test "scoped: replacing an item above" do
-    model1 = %Model{scope: 1, title: "item #1"} |> Repo.insert
-    model2 = %Model{scope: 1, title: "item #2"} |> Repo.insert
-    model3 = %Model{scope: 1, title: "item #3"} |> Repo.insert
-    model4 = %Model{scope: 1, title: "item #4"} |> Repo.insert
-    model5 = %Model{scope: 1, title: "item #5"} |> Repo.insert
+    model1 = %Model{scope: 1, title: "item #1"} |> Repo.insert!
+    model2 = %Model{scope: 1, title: "item #2"} |> Repo.insert!
+    model3 = %Model{scope: 1, title: "item #3"} |> Repo.insert!
+    model4 = %Model{scope: 1, title: "item #4"} |> Repo.insert!
+    model5 = %Model{scope: 1, title: "item #5"} |> Repo.insert!
 
     model4 |> Model.move_scoped_position(2) |> Repo.update
 
@@ -243,9 +251,9 @@ defmodule EctoOrderedTest.Scoped do
   end
 
   test "scoped: updating item with a tail position" do
-    model1 = %Model{scope: 1, title: "item #1"} |> Repo.insert
-    model2 = %Model{scope: 1, title: "item #2"} |> Repo.insert
-    model3 = %Model{scope: 1, title: "item #3"} |> Repo.insert
+    model1 = %Model{scope: 1, title: "item #1"} |> Repo.insert!
+    model2 = %Model{scope: 1, title: "item #2"} |> Repo.insert!
+    model3 = %Model{scope: 1, title: "item #3"} |> Repo.insert!
 
     model2 |> Model.move_scoped_position(4) |> Repo.update
 
@@ -255,13 +263,13 @@ defmodule EctoOrderedTest.Scoped do
   end
 
   test "scoped: moving between scopes" do
-    model1 = %Model{scope: 1, title: "item #1"} |> Repo.insert
-    model2 = %Model{scope: 1, title: "item #2"} |> Repo.insert
-    model3 = %Model{scope: 1, title: "item #3"} |> Repo.insert
+    model1 = %Model{scope: 1, title: "item #1"} |> Repo.insert!
+    model2 = %Model{scope: 1, title: "item #2"} |> Repo.insert!
+    model3 = %Model{scope: 1, title: "item #3"} |> Repo.insert!
 
-    xmodel1 = %Model{scope: 2, title: "item #1"} |> Repo.insert
-    xmodel2 = %Model{scope: 2, title: "item #2"} |> Repo.insert
-    xmodel3 = %Model{scope: 2, title: "item #3"} |> Repo.insert
+    xmodel1 = %Model{scope: 2, title: "item #1"} |> Repo.insert!
+    xmodel2 = %Model{scope: 2, title: "item #2"} |> Repo.insert!
+    xmodel3 = %Model{scope: 2, title: "item #3"} |> Repo.insert!
 
     model2 |> Model.move_scoped_position(4) |> Ecto.Changeset.put_change(:scope, 2) |> Repo.update
 
@@ -280,11 +288,11 @@ defmodule EctoOrderedTest.Scoped do
   ## Deletion
 
   test "scoped: deleting an item" do
-    model1 = %Model{title: "item #1", scope: 1} |> Repo.insert
-    model2 = %Model{title: "item #2", scope: 1} |> Repo.insert
-    model3 = %Model{title: "item #3", scope: 1} |> Repo.insert
-    model4 = %Model{title: "item #4", scope: 1} |> Repo.insert
-    model5 = %Model{title: "item #5", scope: 1} |> Repo.insert
+    model1 = %Model{title: "item #1", scope: 1} |> Repo.insert!
+    model2 = %Model{title: "item #2", scope: 1} |> Repo.insert!
+    model3 = %Model{title: "item #3", scope: 1} |> Repo.insert!
+    model4 = %Model{title: "item #4", scope: 1} |> Repo.insert!
+    model5 = %Model{title: "item #5", scope: 1} |> Repo.insert!
 
     model2 |> Repo.delete
 
