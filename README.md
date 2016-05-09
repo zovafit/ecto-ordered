@@ -10,11 +10,17 @@ Examples
 ```elixir
 # Global positioning
 defmodule MyModel do
-  use Ecto.Model
-  use EctoOrdered
+  use Ecto.Schema
+  import EctoOrdered
 
   schema "models" do
     field :position, :integer
+  end
+  
+  def changeset(model, params) do
+    model
+    |> cast(params, [], [:position])
+    |> set_order(:position)
   end
 end
 
@@ -27,11 +33,11 @@ defmodule MyModel do
     field :reference_id, :integer
     field :position,     :integer
   end
+  
+  def changeset(model, params) do
+    model
+    |> cast(params, [], [:position, :reference_id])
+    |> set_order(:position, :reference_id)
+  end
 end
 
-# Creating and insertion happen as usually (Repo.insert/delete), however,
-# to use movement tracking, changesets or wrapper 'moving API' should be used
-
-> MyModel.move_position(my_model, 6) #=> cs
-> MyModel.changeset(my_model, :move_position, %{"position" => 6}) # Useful for handling external requests
-```
