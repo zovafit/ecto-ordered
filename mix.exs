@@ -28,15 +28,15 @@ defmodule EctoOrdered.Mixfile do
   # Type `mix help deps` for more examples and options
   defp deps do
     [
-     {:ecto, "~> 0.8.1"},
-     {:postgrex, "~> 0.7.0", only: :test},
+     {:ecto, "~> 1.1"},
+     {:postgrex, "~> 0.11.0", only: :test},
     ]
   end
 
   defp package do
     [
       files: ["lib", "priv", "mix.exs", "README*", "readme*", "LICENSE*", "license*"],
-      contributors: ["Yurii Rashkovskii"],
+      contributors: ["Yurii Rashkovskii", "Andrew Harvey"],
       licenses: ["Apache 2.0"],
       links: %{"GitHub" => "https://github.com/trustatom-oss/ecto-ordered"}
     ]
