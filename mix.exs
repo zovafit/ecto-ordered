@@ -36,7 +36,7 @@ defmodule EctoOrdered.Mixfile do
   defp package do
     [
       files: ["lib", "priv", "mix.exs", "README*", "readme*", "LICENSE*", "license*"],
-      contributors: ["Yurii Rashkovskii"],
+      contributors: ["Yurii Rashkovskii", "Andrew Harvey"],
       licenses: ["Apache 2.0"],
       links: %{"GitHub" => "https://github.com/trustatom-oss/ecto-ordered"}
     ]
