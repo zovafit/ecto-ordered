@@ -81,6 +81,7 @@ defmodule EctoOrdered do
     end)
   end
 
+  @doc false
   def before_insert(cs, %Order{field: field} = struct) do
     struct = %{struct|module: cs.model.__struct__}
     struct = %Order{max: max} = update_max(struct, cs)
@@ -97,6 +98,7 @@ defmodule EctoOrdered do
     end
   end
 
+  @doc false
   def before_update(cs, struct) do
     %{struct|module: cs.model.__struct__}
     |> update_old_scope(cs)
@@ -206,6 +208,7 @@ defmodule EctoOrdered do
     cs
   end
 
+  @doc false
   def before_delete(cs, struct) do
     struct = %Order{max: max} = %{struct | module: cs.model.__struct__}
                                 |> update_max(cs)
