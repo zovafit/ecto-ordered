@@ -10,7 +10,7 @@ defmodule EctoOrderedTest.Migrations do
     create table(:scoped_model) do
       add :title, :string
       add :scope, :integer
-      add :scoped_position, :integer
+      add :scoped_rank, :integer
     end
   end
 end

@@ -105,7 +105,7 @@ defmodule EctoOrdered do
 
   defp update_rank(%Order{rank_field: rank_field, position_field: position_field} = struct, cs) do
     case get_field(cs, position_field) do
-      :last -> %Order{current_last: current_last} = update_current_last(struct)
+      :last -> %Order{current_last: current_last} = update_current_last(struct, cs)
         if current_last do
           put_change(cs, rank_field, rank_between(@max, current_last))
         else
@@ -114,7 +114,7 @@ defmodule EctoOrdered do
       :middle -> put_change(cs, rank_field, rank_between(@max, @min))
       nil -> update_rank(struct, put_change(cs, position_field, :last))
       position when is_integer(position) ->
-        {rank_before, rank_after} = neighbours_at_position(struct, position, cs.data)
+        {rank_before, rank_after} = neighbours_at_position(struct, position, cs)
         put_change(cs, rank_field, rank_between(rank_after, rank_before))
     end
   end
@@ -122,12 +122,12 @@ defmodule EctoOrdered do
   defp neighbours_at_position(%Order{module: module,
                                      rank_field: rank_field,
                                      repo: repo
-                                    }, position, _) when position <= 0 do
+                                    } = struct, position, cs) when position <= 0 do
     first = (from m in module,
              select: field(m, ^rank_field),
              order_by: [asc: field(m, ^rank_field)],
              limit: 1
-    ) |> repo.one
+    ) |> scope_query(struct, cs) |> repo.one
 
     {@min, first}
   end
@@ -135,14 +135,15 @@ defmodule EctoOrdered do
   defp neighbours_at_position(%Order{module: module,
                                      rank_field: rank_field,
                                      repo: repo
-                          } = struct, position, existing) do
-    %Order{current_last: current_last} = update_current_last(struct)
+                          } = struct, position, %{data: existing} = cs) do
+    %Order{current_last: current_last} = update_current_last(struct, cs)
     neighbours = (from m in module,
      select: field(m, ^rank_field),
      order_by: [asc: field(m, ^rank_field)],
      limit: 2,
      offset: ^(position - 1)
     )
+    |> scope_query(struct, cs)
     |> exclude_existing(existing)
     |> repo.all
     case neighbours do
@@ -163,22 +164,24 @@ defmodule EctoOrdered do
   defp update_current_last(%Order{current_last: nil,
                                 module: module,
                                 rank_field: rank_field,
-                                repo: repo
-                               } = struct) do
+                                repo: repo,
+                                scope_field: scope_field
+                               } = struct, cs) do
     last = (from m in module,
             select: field(m, ^rank_field),
             order_by: [desc: field(m, ^rank_field)],
             limit: 1
     )
+    |> scope_query(struct, cs)
     |> repo.one
     if last do
-    %Order{struct | current_last: last}
+      %Order{struct | current_last: last}
     else
       %Order{struct | current_last: @min}
     end
   end
 
-  defp update_current_last(%Order{} = struct) do
+  defp update_current_last(%Order{} = struct, _) do
     # noop. We've already got the last.
     struct
   end
@@ -191,6 +194,15 @@ defmodule EctoOrdered do
     ( above - below ) / 2
     |> round
     |> + below
+  end
+
+  defp scope_query(query, %Order{scope_field: scope_field}, cs) do
+    scope = get_field(cs, scope_field)
+    if scope do
+      (from q in query, where: field(q, ^scope_field) == ^scope)
+    else
+      query
+    end
   end
 
 end

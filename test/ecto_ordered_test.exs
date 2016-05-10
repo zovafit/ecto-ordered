@@ -59,9 +59,9 @@ defmodule EctoOrderedTest do
     %Model{title: "item with no position, going to be #1"}
     |> Model.changeset(%{})
     |> Repo.insert
-    model = %Model{title: "item #10", position: 10}
-    |> Model.changeset(%{})
-    |> Repo.insert!
+      model = %Model{title: "item #10", position: 10}
+      |> Model.changeset(%{})
+      |> Repo.insert!
     assert (from m in Model, select: m.title, order_by: m.rank, offset: 1, limit: 1)
     |> Repo.one == model.title
   end
@@ -166,43 +166,41 @@ defmodule EctoOrderedTest.Scoped do
     schema "scoped_model" do
       field :title,            :string
       field :scope,            :integer
-      field :scoped_position,  :integer
+      field :scoped_position,  :integer, virtual: true
+      field :scoped_rank,      :integer
     end
 
     def changeset(model, params) do
       model
       |> cast(params, [:scope, :scoped_position, :title])
-      |> set_order(:scoped_position, :scope)
+      |> set_order(:scoped_position, :scoped_rank, :scope)
     end
-
-    def delete(model) do
-      model
-      |> cast(%{}, [])
-      |> Map.put(:action, :delete)
-      |> set_order(:scoped_position, :scope)
-    end
-
   end
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(EctoOrderedTest.Repo)
+    :ok
   end
+
+  def ranked_ids(model, scope) do
+    (from m in model, where: m.scope == ^scope, select: m.id, order_by: m.scoped_rank) |> Repo.all
+  end
+
   # Insertion
 
   test "scoped: inserting item with no position" do
     for s <- 1..10, i <- 1..10 do
       model = Model.changeset(%Model{scope: s, title: "no position, going to be ##{i}"}, %{})
       |> Repo.insert!
-      IO.puts "??????"
-      assert model.scoped_position == i
+      assert model.scoped_rank != nil
     end
     for s <- 1..10 do
-      assert (from m in Model,
-              select: m.scoped_position,
+      models = (from m in Model,
+              select: [m.id, m.scoped_rank],
               order_by: [asc: :id], where: m.scope == ^s) |>
-        Repo.all ==  Enum.into(1..10, [])
+        Repo.all
+      assert models == Enum.sort_by(models, &Enum.at(&1, 1))
     end
-
   end
 
   test "scoped: inserting item with a correct appending position" do
@@ -213,16 +211,7 @@ defmodule EctoOrderedTest.Scoped do
     model = Model.changeset(%Model{scope: 10, title: "item #2", scoped_position: 2}, %{})
     |> Repo.insert!
 
-    assert model.scoped_position == 2
-  end
-
-  test "scoped: inserting item with a gapped position" do
-    Model.changeset(%Model{scope: 1, title: "item with no position, going to be #1"}, %{})
-    |> Repo.insert!
-    assert_raise EctoOrdered.InvalidMove, "too large", fn ->
-      Model.changeset(%Model{scope: 1, title: "item #10", scoped_position: 10}, %{})
-      |> Repo.insert
-    end
+    assert (from m in Model, where: m.scope == 10, select: m.id, offset: 1) |> Repo.one == model.id
   end
 
   test "scoped: inserting item with an inserting position" do
@@ -233,13 +222,10 @@ defmodule EctoOrderedTest.Scoped do
     model3 = Model.changeset(%Model{scope: 1, title: "no position, going to be #3"}, %{})
     |> Repo.insert!
 
-    model = Model.changeset(%Model{scope: 1,  title: "item #2", scoped_position: 2}, %{})
+    model = Model.changeset(%Model{scope: 1,  title: "item #2", scoped_position: 1}, %{})
     |> Repo.insert!
 
-    assert model.scoped_position == 2
-    assert Repo.get(Model, model1.id).scoped_position == 1
-    assert Repo.get(Model, model2.id).scoped_position == 3
-    assert Repo.get(Model, model3.id).scoped_position == 4
+    assert ranked_ids(Model, 1) == [model1.id, model.id, model2.id, model3.id]
   end
 
   test "scoped: inserting item with an inserting position at #1" do
@@ -249,13 +235,10 @@ defmodule EctoOrderedTest.Scoped do
     |> Repo.insert!
     model3 = Model.changeset(%Model{scope: 1, title: "no position, going to be #3"}, %{})
     |> Repo.insert!
-    model  = Model.changeset(%Model{scope: 1, title: "item #1", scoped_position: 1}, %{})
+    model  = Model.changeset(%Model{scope: 1, title: "item #1", scoped_position: 0}, %{})
     |> Repo.insert!
 
-    assert model.scoped_position == 1
-    assert Repo.get(Model, model1.id).scoped_position == 2
-    assert Repo.get(Model, model2.id).scoped_position == 3
-    assert Repo.get(Model, model3.id).scoped_position == 4
+    assert ranked_ids(Model, 1) == [model.id, model1.id, model2.id, model3.id]
   end
 
   ## Moving
@@ -265,7 +248,7 @@ defmodule EctoOrderedTest.Scoped do
 
     model1 = Model.changeset(model, %{title: "item with a position", scope: 1})
     |> Repo.update!
-    assert model.scoped_position == model1.scoped_position
+    assert model.scoped_rank == model1.scoped_rank
   end
 
   test "scoped: replacing an item below" do
@@ -275,13 +258,9 @@ defmodule EctoOrderedTest.Scoped do
     model4 = Model.changeset(%Model{scope: 1, title: "item #4"}, %{}) |> Repo.insert!
     model5 = Model.changeset(%Model{scope: 1, title: "item #5"}, %{}) |> Repo.insert!
 
-    model2 |> Model.changeset(%{scoped_position: 4}) |> Repo.update
+    model2 |> Model.changeset(%{scoped_position: 3}) |> Repo.update
 
-    assert Repo.get(Model, model1.id).scoped_position == 1
-    assert Repo.get(Model, model3.id).scoped_position == 2
-    assert Repo.get(Model, model4.id).scoped_position == 3
-    assert Repo.get(Model, model2.id).scoped_position == 4
-    assert Repo.get(Model, model5.id).scoped_position == 5
+    assert ranked_ids(Model, 1) == [model1.id, model3.id, model4.id, model2.id, model5.id]
   end
 
   test "scoped: replacing an item above" do
@@ -291,13 +270,9 @@ defmodule EctoOrderedTest.Scoped do
     model4 = Model.changeset(%Model{scope: 1, title: "item #4"}, %{}) |> Repo.insert!
     model5 = Model.changeset(%Model{scope: 1, title: "item #5"}, %{}) |> Repo.insert!
 
-    model4 |> Model.changeset(%{scoped_position: 2}) |> Repo.update
+    model4 |> Model.changeset(%{scoped_position: 1}) |> Repo.update
 
-    assert Repo.get(Model, model1.id).scoped_position == 1
-    assert Repo.get(Model, model4.id).scoped_position == 2
-    assert Repo.get(Model, model2.id).scoped_position == 3
-    assert Repo.get(Model, model3.id).scoped_position == 4
-    assert Repo.get(Model, model5.id).scoped_position == 5
+    assert ranked_ids(Model, 1) == [model1.id, model4.id, model2.id, model3.id, model5.id]
   end
 
   test "scoped: updating item with a tail position" do
@@ -307,9 +282,7 @@ defmodule EctoOrderedTest.Scoped do
 
     model2 |> Model.changeset(%{scoped_position: 4}) |> Repo.update
 
-    assert Repo.get(Model, model1.id).scoped_position == 1
-    assert Repo.get(Model, model3.id).scoped_position == 2
-    assert Repo.get(Model, model2.id).scoped_position == 3
+    assert ranked_ids(Model, 1) == [model1.id, model3.id, model2.id]
   end
 
   test "scoped: moving between scopes" do
@@ -323,16 +296,11 @@ defmodule EctoOrderedTest.Scoped do
 
     model2 |> Model.changeset(%{scoped_position: 4, scope: 2}) |> Repo.update
 
-    assert Repo.get(Model, model1.id).scoped_position == 1
     assert Repo.get(Model, model1.id).scope == 1
-    assert Repo.get(Model, model3.id).scoped_position == 2
     assert Repo.get(Model, model3.id).scope == 1
+    assert ranked_ids(Model, 1) == [model1.id, model3.id]
 
-    assert Repo.get(Model, xmodel1.id).scoped_position == 1
-    assert Repo.get(Model, xmodel2.id).scoped_position == 2
-    assert Repo.get(Model, xmodel3.id).scoped_position == 3
-    assert Repo.get(Model, model2.id).scoped_position == 4
-    assert Repo.get(Model, model2.id).scope == 2
+    assert ranked_ids(Model, 2) == [xmodel1.id, xmodel2.id, xmodel3.id, model2.id]
   end
 
   ## Deletion
@@ -344,11 +312,8 @@ defmodule EctoOrderedTest.Scoped do
     model4 = Model.changeset(%Model{title: "item #4", scope: 1}, %{}) |> Repo.insert!
     model5 = Model.changeset(%Model{title: "item #5", scope: 1}, %{}) |> Repo.insert!
 
-    model2 |> Model.delete |> Repo.delete
+    model2 |> Repo.delete
 
-    assert Repo.get(Model, model1.id).scoped_position == 1
-    assert Repo.get(Model, model3.id).scoped_position == 2
-    assert Repo.get(Model, model4.id).scoped_position == 3
-    assert Repo.get(Model, model5.id).scoped_position == 4
+    assert ranked_ids(Model, 1) == [model1.id, model3.id, model4.id, model5.id]
   end
 end
