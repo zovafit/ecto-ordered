@@ -4,7 +4,7 @@ defmodule EctoOrderedTest.Migrations do
   def change do
     create table(:model) do
       add :title, :string
-      add :position, :integer
+      add :rank, :integer
     end
 
     create table(:scoped_model) do

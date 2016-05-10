@@ -10,21 +10,16 @@ defmodule EctoOrderedTest do
 
     schema "model" do
       field :title,            :string
-      field :position,         :integer
+      field :rank,         :integer
+      field :position,     :integer, virtual: true
     end
 
     def changeset(model, params) do
       model
       |> cast(params, [:position, :title])
-      |> set_order(:position)
+      |> set_order(:position, :rank)
     end
 
-    def delete(model) do
-      model
-      |> cast(%{}, [])
-      |> Map.put(:action, :delete)
-      |> set_order(:position)
-    end
   end
 
   setup do
@@ -32,37 +27,43 @@ defmodule EctoOrderedTest do
   end
 
 
+  def ranked_ids(model) do
+    (from m in model, select: m.id, order_by: m.rank) |> Repo.all
+  end
+
+
   # No scope
 
   ## Inserting
 
-  test "inserting item with no position" do
+  test "an item inserted with no position is given a rank" do
     for i <- 1..10 do
       model = %Model{}
       |> Model.changeset(%{title: "item with no position, going to be ##{i}"})
       |> Repo.insert!
-      assert model.position == i
+      assert model.rank != nil
     end
-    assert (from m in Model, select: m.position) |> Repo.all == Enum.into(1..10, [])
+
+    models = (from m in Model, select: m.rank, order_by: [asc: :id]) |> Repo.all
+    assert models == Enum.sort(models)
   end
 
   test "inserting item with a correct appending position" do
-    %Model{title: "item with no position, going to be #1"} |> Repo.insert
-    model = %Model{title: "item #2", position: 2}
-    |> Model.changeset(%{})
-    |> Repo.insert!
-    assert model.position == 2
+    %Model{} |> Model.changeset(%{title: "no position, going to be #1"}) |> Repo.insert
+    %Model{} |> Model.changeset(%{title: "item #2", position: 2}) |> Repo.insert!
+    models = (from m in Model, select: m.rank, order_by: [asc: :id]) |> Repo.all
+    assert models == Enum.sort(models)
   end
 
   test "inserting item with a gapped position" do
     %Model{title: "item with no position, going to be #1"}
     |> Model.changeset(%{})
     |> Repo.insert
-    assert_raise EctoOrdered.InvalidMove, "too large", fn ->
-      %Model{title: "item #10", position: 10}
-      |> Model.changeset(%{})
-      |> Repo.insert!
-    end
+    model = %Model{title: "item #10", position: 10}
+    |> Model.changeset(%{})
+    |> Repo.insert!
+    assert (from m in Model, select: m.title, order_by: m.rank, offset: 1, limit: 1)
+    |> Repo.one == model.title
   end
 
   test "inserting item with an inserting position" do
@@ -72,27 +73,23 @@ defmodule EctoOrderedTest do
     |> Repo.insert!
     model3 = Model.changeset(%Model{title: "item with no position, going to be #3"}, %{})
     |> Repo.insert!
-    model = Model.changeset(%Model{title: "item #2", position: 2}, %{})
+    model = Model.changeset(%Model{title: "item #2", position: 1}, %{})
     |> Repo.insert!
-    assert model.position == 2
-    assert Repo.get(Model, model1.id).position == 1
-    assert Repo.get(Model, model2.id).position == 3
-    assert Repo.get(Model, model3.id).position == 4
+
+    assert ranked_ids(Model) == [model1.id, model.id, model2.id, model3.id]
   end
 
-  test "inserting item with an inserting position at #1" do
-    model1 = Model.changeset(%Model{title: "item with no position, going to be #1"}, %{})
+  test "inserting item with an inserting position at index 0" do
+    model1 = Model.changeset(%Model{title: "item with no position, going to be index 0"}, %{})
     |> Repo.insert!
-    model2 = Model.changeset(%Model{title: "item with no position, going to be #2"}, %{})
+    model2 = Model.changeset(%Model{title: "item with no position, going to be index 1"}, %{})
     |> Repo.insert!
-    model3 = Model.changeset(%Model{title: "item with no position, going to be #3"}, %{})
+    model3 = Model.changeset(%Model{title: "item with no position, going to be index 2"}, %{})
     |> Repo.insert!
-    model = Model.changeset(%Model{title: "item #1", position: 1}, %{})
+    model = Model.changeset(%Model{title: "new item index 0", position: 0}, %{})
     |> Repo.insert!
-    assert model.position == 1
-    assert Repo.get(Model, model1.id).position == 2
-    assert Repo.get(Model, model2.id).position == 3
-    assert Repo.get(Model, model3.id).position == 4
+
+    assert ranked_ids(Model) == [model.id, model1.id, model2.id, model3.id]
   end
 
   ## Moving
@@ -102,7 +99,7 @@ defmodule EctoOrderedTest do
     |> Repo.insert!
     model1 = Model.changeset(%Model{model | title: "item with a position"}, %{})
     |> Repo.update!
-    assert model.position == model1.position
+    assert model.rank == model1.rank
   end
 
   test "replacing an item below" do
@@ -112,13 +109,9 @@ defmodule EctoOrderedTest do
     model4 = Model.changeset(%Model{title: "item #4"}, %{}) |> Repo.insert!
     model5 = Model.changeset(%Model{title: "item #5"}, %{}) |> Repo.insert!
 
-    model2 |> Model.changeset(%{position: 4}) |> Repo.update!
+    model2 |> Model.changeset(%{position: 2}) |> Repo.update!
 
-    assert Repo.get(Model, model1.id).position == 1
-    assert Repo.get(Model, model3.id).position == 2
-    assert Repo.get(Model, model4.id).position == 3
-    assert Repo.get(Model, model2.id).position == 4
-    assert Repo.get(Model, model5.id).position == 5
+    assert ranked_ids(Model) == [model1.id, model3.id, model2.id, model4.id, model5.id]
   end
 
   test "replacing an item above" do
@@ -128,13 +121,9 @@ defmodule EctoOrderedTest do
     model4 = Model.changeset(%Model{title: "item #4"}, %{}) |> Repo.insert!
     model5 = Model.changeset(%Model{title: "item #5"}, %{}) |> Repo.insert!
 
-    model4 |> Model.changeset(%{position: 2}) |> Repo.update
+    model4 |> Model.changeset(%{position: 1}) |> Repo.update!
 
-    assert Repo.get(Model, model1.id).position == 1
-    assert Repo.get(Model, model4.id).position == 2
-    assert Repo.get(Model, model2.id).position == 3
-    assert Repo.get(Model, model3.id).position == 4
-    assert Repo.get(Model, model5.id).position == 5
+    assert ranked_ids(Model) == [model1.id, model4.id, model2.id, model3.id, model5.id]
   end
 
   test "updating item with a tail position" do
@@ -144,9 +133,7 @@ defmodule EctoOrderedTest do
 
     model2 |> Model.changeset(%{position: 4}) |> Repo.update!
 
-    assert Repo.get(Model, model1.id).position == 1
-    assert Repo.get(Model, model3.id).position == 2
-    assert Repo.get(Model, model2.id).position == 3
+    assert ranked_ids(Model) == [model1.id, model3.id, model2.id]
   end
 
   ## Deletion
@@ -158,12 +145,9 @@ defmodule EctoOrderedTest do
     model4 = Model.changeset(%Model{title: "item #4"}, %{}) |> Repo.insert!
     model5 = Model.changeset(%Model{title: "item #5"}, %{}) |> Repo.insert!
 
-    model2 |> Model.delete |> Repo.delete
+    model2 |> Repo.delete
 
-    assert Repo.get(Model, model1.id).position == 1
-    assert Repo.get(Model, model3.id).position == 2
-    assert Repo.get(Model, model4.id).position == 3
-    assert Repo.get(Model, model5.id).position == 4
+    assert ranked_ids(Model) == [model1.id, model3.id, model4.id, model5.id]
   end
 
 end
@@ -209,6 +193,7 @@ defmodule EctoOrderedTest.Scoped do
     for s <- 1..10, i <- 1..10 do
       model = Model.changeset(%Model{scope: s, title: "no position, going to be ##{i}"}, %{})
       |> Repo.insert!
+      IO.puts "??????"
       assert model.scoped_position == i
     end
     for s <- 1..10 do
