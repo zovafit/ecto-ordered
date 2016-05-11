@@ -150,6 +150,37 @@ defmodule EctoOrderedTest do
     assert ranked_ids(Model) == [model1.id, model3.id, model4.id, model5.id]
   end
 
+  test "collision handling at max" do
+    for _ <- 1..100 do
+      Model.changeset(%Model{}, %{}) |> Repo.insert!
+    end
+
+    ranks = (from m in Model, order_by: m.rank, select: m.rank) |> Repo.all
+
+    assert ranks == Enum.uniq(ranks)
+  end
+
+  test "collision handling at min" do
+    for _ <- 1..100 do
+        Model.changeset(%Model{}, %{position: 0}) |> Repo.insert
+    end
+
+    ranks = (from m in Model, order_by: m.rank, select: m.rank) |> Repo.all
+
+    assert ranks == Enum.uniq(ranks)
+  end
+  test "collision handling in the middle" do
+    for _ <- 1..25 do
+      Model.changeset(%Model{}, %{position: 0}) |> Repo.insert!
+    end
+    for _ <- 1..25 do
+      Model.changeset(%Model{}, %{position: 1000}) |> Repo.insert!
+    end
+    ranks = (from m in Model, order_by: m.rank, select: m.rank) |> Repo.all
+
+    assert ranks == Enum.uniq(ranks)
+  end
+
 end
 
 

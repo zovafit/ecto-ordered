@@ -42,7 +42,8 @@ defmodule EctoOrdered do
             position_field:        :position,
             rank_field: :rank,
             scope_field:        nil,
-            current_last: nil
+            current_last: nil,
+            current_first: nil
 
   defmodule InvalidMove do
     defexception type: nil
@@ -86,7 +87,7 @@ defmodule EctoOrdered do
       update_rank(struct, cs)
     else
       update_rank(struct, put_change(cs, position_field, :last))
-    end
+    end |> ensure_unique_position(struct)
   end
 
   @doc false
@@ -98,7 +99,7 @@ defmodule EctoOrdered do
                     repo: cs.repo
                    }
     case fetch_change(cs, position_field) do
-      {:ok, _} -> update_rank(struct, cs)
+      {:ok, _} -> update_rank(struct, cs) |> ensure_unique_position(struct)
       :error -> cs
     end
   end
@@ -119,6 +120,89 @@ defmodule EctoOrdered do
     end
   end
 
+  defp ensure_unique_position(cs, %Order{rank_field: rank_field} = struct) do
+    rank = get_field(cs, rank_field)
+    if rank > @max || current_at_rank(struct, cs) do
+      shift_ranks(struct, cs)
+    end
+    cs
+  end
+
+  defp shift_ranks(%Order{module: module, rank_field: rank_field} = struct, cs) do
+    query = scope_query(module, struct, cs)
+    current_rank = get_field(cs, rank_field)
+    %Order{current_first: current_first} = update_current_first(struct, cs)
+    %Order{current_last: current_last} = update_current_last(struct, cs)
+    cond do
+      current_first > @min && current_rank == @max -> shift_others_down(struct, cs)
+      current_last < @max - 1 && current_rank < current_last -> shift_others_up(struct, cs)
+      true -> rebalance_ranks(struct, cs)
+    end
+  end
+
+  defp rebalance_ranks(%Order{module: module,
+                              repo: repo,
+                              rank_field: rank_field,
+                              position_field: position_field
+                             } = struct, cs) do
+    rows = current_order(struct, cs)
+    old_attempted_rank = get_field(cs, rank_field)
+    count = length(rows) + 1
+
+    rows
+    |> Enum.with_index
+    |> Enum.map(fn {row, index} ->
+      old_rank = Map.get(row, rank_field)
+      change(row, [{rank_field,  rank_for_row(old_rank, index, count, old_attempted_rank)}])
+      |> repo.update!
+    end)
+    put_change(cs, rank_field, rank_for_row(0, get_field(cs, position_field), count, 1))
+  end
+
+  defp rank_for_row(old_rank, index, count, old_attempted_rank) do
+    # If our old rank is less than the old attempted rank, then our effective index is fine
+    new_index = if old_rank < old_attempted_rank do
+      index
+    # otherwise, we need to increment our index by 1 
+    else
+      index + 1
+    end
+    round((@max - @min) / count) * new_index + @min
+  end
+
+  defp current_order(%Order{module: module, rank_field: rank_field, repo: repo} = struct, cs) do
+    (from m in module, order_by: field(m, ^rank_field))
+     |> scope_query(struct, cs)
+     |> repo.all
+  end
+
+  defp shift_others_up(%Order{module: module,
+                                rank_field: rank_field,
+                                repo: repo} = struct, %{model: existing} = cs) do
+    current_rank = get_field(cs, rank_field)
+    (from m in module, where: field(m, ^rank_field) >= ^current_rank)
+    |> exclude_existing(existing)
+    |> repo.update_all([inc: [{rank_field, 1}]])
+    cs
+  end
+
+  defp shift_others_down(%Order{module: module,
+                                rank_field: rank_field,
+                                repo: repo} = struct, %{model: existing} = cs) do
+    current_rank = get_field(cs, rank_field)
+    (from m in module, where: field(m, ^rank_field) <= ^current_rank)
+    |> exclude_existing(existing)
+    |> repo.update_all([inc: [{rank_field, -1}]])
+    cs
+  end
+
+  defp current_at_rank(%Order{module: module, repo: repo, rank_field: rank_field} = struct, cs) do
+    rank = get_field(cs, rank_field)
+    (from m in module, where: field(m, ^rank_field) == ^rank, limit: 1)
+    |> scope_query(struct, cs)
+    |> repo.one
+  end
+
   defp neighbours_at_position(%Order{module: module,
                                      rank_field: rank_field,
                                      repo: repo
@@ -129,7 +213,11 @@ defmodule EctoOrdered do
              limit: 1
     ) |> scope_query(struct, cs) |> repo.one
 
-    {@min, first}
+    if first do
+      {@min, first}
+    else
+      {@min, @max}
+    end
   end
 
   defp neighbours_at_position(%Order{module: module,
@@ -185,6 +273,27 @@ defmodule EctoOrdered do
     # noop. We've already got the last.
     struct
   end
+
+  defp update_current_first(%Order{current_first: nil,
+                                  module: module,
+                                  rank_field: rank_field,
+                                  repo: repo
+                                 } = struct, cs) do
+    first = (from m in module,
+            select: field(m, ^rank_field),
+            order_by: [asc: field(m, ^rank_field)],
+            limit: 1
+    )
+    |> scope_query(struct, cs)
+    |> repo.one
+
+    if first do
+      %Order{struct | current_first: first}
+    else
+      struct
+    end
+  end
+
 
   defp rank_between(nil, nil) do
     rank_between(8388607, -8388607)
