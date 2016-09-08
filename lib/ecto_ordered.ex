@@ -222,6 +222,11 @@ defmodule EctoOrdered do
     from(m in module) |> selector(field)
   end
 
+  defp query(%Order{module: module, field: field, scope: scope}, cs) when is_list(scope) do
+     new_scope = for field <- scope, do: {field, get_field(cs, field)}
+     scope_query(module, field, scope, new_scope)
+  end
+
   defp query(%Order{module: module, field: field, scope: scope}, cs) do
      new_scope = get_field(cs, scope)
      scope_query(module, field, scope, new_scope)
@@ -244,6 +249,12 @@ defmodule EctoOrdered do
     q
     |> selector(field)
     |> where([m], is_nil(field(m, ^scope)))
+  end
+
+  defp scope_query(q, field, scope, new_scope) when is_list(new_scope) do
+    q
+    |> selector(field)
+    |> where(^new_scope)
   end
 
   defp scope_query(q, field, scope, new_scope) do
