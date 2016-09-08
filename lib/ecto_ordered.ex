@@ -112,6 +112,14 @@ defmodule EctoOrdered do
     execute_increment(struct, query)
   end
 
+  defp increment_position(%Order{repo: r, module: module, field: field, scope: scope, new_position: split_by, new_scope: new_scope} = struct) when is_list(scope) do
+    query =
+      module
+      |> where([m], field(m, ^field) >= ^split_by)
+      |> where(^Enum.zip(scope, new_scope))
+    execute_increment(struct, query)
+  end
+
   defp increment_position(%Order{module: module, field: field, scope: scope, new_position: split_by, new_scope: new_scope} = struct) do
     query = from m in module,
             where: field(m, ^field) >= ^split_by and field(m, ^scope) == ^new_scope
@@ -124,10 +132,26 @@ defmodule EctoOrdered do
     execute_decrement(struct, query)
   end
 
+  defp decrement_position(%Order{module: module, field: field, old_position: split_by, until: nil, old_scope: old_scope, scope: scope} = struct) when is_list(scope) do
+    query =
+      module
+      |> where([m], field(m, ^field) > ^split_by)
+      |> where(^Enum.zip(scope, old_scope))
+    execute_decrement(struct, query)
+  end
+
   defp decrement_position(%Order{module: module, field: field, old_position: split_by, until: nil, old_scope: old_scope, scope: scope} = struct) do
     query = from m in module,
     where: field(m, ^field) > ^split_by
     and field(m, ^scope) == ^old_scope
+    execute_decrement(struct, query)
+  end
+
+  defp decrement_position(%Order{module: module, field: field, scope: scope, old_position: split_by, until: until, old_scope: old_scope} = struct) when is_list(scope) do
+    query =
+      module
+      |> where([m], field(m, ^field) > ^split_by and field(m, ^field) <= ^until)
+      |> where(^Enum.zip(scope, old_scope))
     execute_decrement(struct, query)
   end
 
@@ -148,8 +172,16 @@ defmodule EctoOrdered do
   end
   defp validate_position!(cs, _), do: cs
 
+  defp update_old_scope(%Order{scope: scope} = struct, cs) when is_list(scope) do
+    %{struct|old_scope: Enum.map(scope, fn(f) -> Map.get(cs.data, f) end)}
+  end
+
   defp update_old_scope(%Order{scope: scope} = struct, cs) do
     %{struct|old_scope: Map.get(cs.data, scope)}
+  end
+
+  defp update_new_scope(%Order{scope: scope} = struct, cs) when is_list(scope) do
+    %{struct|new_scope: Enum.map(scope, fn(f) -> get_field(cs, f) end)}
   end
 
   defp update_new_scope(%Order{scope: scope} = struct, cs) do
@@ -170,6 +202,14 @@ defmodule EctoOrdered do
     %{struct|max: max}
   end
 
+  defp reorder_model(%Order{scope: scope, new_scope: new_scope, old_scope: old_scope} = struct, cs)
+    when not is_nil(old_scope) and is_list(scope) and new_scope != old_scope do
+    cs
+    |> change(Enum.zip(scope, new_scope))
+    |> before_delete(struct)
+
+    before_insert(cs, struct)
+  end
 
   defp reorder_model(%Order{scope: scope, old_scope: old_scope, new_scope: new_scope} = struct, cs)
       when not is_nil(old_scope) and new_scope != old_scope do
