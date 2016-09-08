@@ -116,7 +116,7 @@ defmodule EctoOrdered do
     query =
       module
       |> where([m], field(m, ^field) >= ^split_by)
-      |> where(^Enum.zip(scope, new_scope))
+      |> multi_scope_query(scope, new_scope)
     execute_increment(struct, query)
   end
 
@@ -136,7 +136,7 @@ defmodule EctoOrdered do
     query =
       module
       |> where([m], field(m, ^field) > ^split_by)
-      |> where(^Enum.zip(scope, old_scope))
+      |> multi_scope_query(scope, old_scope)
     execute_decrement(struct, query)
   end
 
@@ -151,7 +151,7 @@ defmodule EctoOrdered do
     query =
       module
       |> where([m], field(m, ^field) > ^split_by and field(m, ^field) <= ^until)
-      |> where(^Enum.zip(scope, old_scope))
+      |> multi_scope_query(scope, old_scope)
     execute_decrement(struct, query)
   end
 
@@ -263,13 +263,16 @@ defmodule EctoOrdered do
   end
 
   defp query(%Order{module: module, field: field, scope: scope}, cs) when is_list(scope) do
-     new_scope = for field <- scope, do: {field, get_field(cs, field)}
-     scope_query(module, field, scope, new_scope)
+    Enum.reduce(scope, module, fn(s, q) ->
+      new_scope = get_field(cs, s)
+      scope_query(q, s, new_scope)
+    end) |> selector(field)
   end
 
   defp query(%Order{module: module, field: field, scope: scope}, cs) do
-     new_scope = get_field(cs, scope)
-     scope_query(module, field, scope, new_scope)
+    new_scope = get_field(cs, scope)
+    scope_query(module, scope, new_scope)
+    |> selector(field)
   end
 
   defp selector(q, field) do
@@ -285,21 +288,16 @@ defmodule EctoOrdered do
     query |> repo.update_all([inc: [{field, -1}]])
   end
 
-  defp scope_query(q, field, scope, nil) do
-    q
-    |> selector(field)
-    |> where([m], is_nil(field(m, ^scope)))
+  def multi_scope_query(query, scope, new_scope) do
+    Enum.zip(scope, new_scope)
+    |> Enum.reduce(query, fn(s, q) -> scope_query(q, elem(s, 0), elem(s, 1)) end)
   end
 
-  defp scope_query(q, field, scope, new_scope) when is_list(new_scope) do
-    q
-    |> selector(field)
-    |> where(^new_scope)
+  defp scope_query(q, scope, nil) do
+    q |> where([m], is_nil(field(m, ^scope)))
   end
 
-  defp scope_query(q, field, scope, new_scope) do
-    q
-    |> selector(field)
-    |> where([m], field(m, ^scope) == ^new_scope)
+  defp scope_query(q, scope, new_scope) do
+    q |> where([m], field(m, ^scope) == ^new_scope)
   end
 end
