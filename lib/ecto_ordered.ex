@@ -288,7 +288,7 @@ defmodule EctoOrdered do
     query |> repo.update_all([inc: [{field, -1}]])
   end
 
-  def multi_scope_query(query, scope, new_scope) do
+  defp multi_scope_query(query, scope, new_scope) do
     Enum.zip(scope, new_scope)
     |> Enum.reduce(query, fn(s, q) -> scope_query(q, elem(s, 0), elem(s, 1)) end)
   end
