@@ -83,7 +83,7 @@ defmodule EctoOrdered do
 
   @doc false
   def before_insert(cs, %Order{field: field} = struct) do
-    struct = %{struct|module: cs.model.__struct__}
+    struct = %{struct|module: cs.data.__struct__}
     struct = %Order{max: max} = update_max(struct, cs)
     position_assigned = get_field(cs, field)
 
@@ -100,7 +100,7 @@ defmodule EctoOrdered do
 
   @doc false
   def before_update(cs, struct) do
-    %{struct|module: cs.model.__struct__}
+    %{struct|module: cs.data.__struct__}
     |> update_old_scope(cs)
     |> update_new_scope(cs)
     |> reorder_model(cs)
@@ -149,7 +149,7 @@ defmodule EctoOrdered do
   defp validate_position!(cs, _), do: cs
 
   defp update_old_scope(%Order{scope: scope} = struct, cs) do
-    %{struct|old_scope: Map.get(cs.model, scope)}
+    %{struct|old_scope: Map.get(cs.data, scope)}
   end
 
   defp update_new_scope(%Order{scope: scope} = struct, cs) do
@@ -161,7 +161,7 @@ defmodule EctoOrdered do
   end
 
   defp update_old_position(%Order{field: field} = struct, cs) do
-    %{struct|old_position: Map.get(cs.model, field)}
+    %{struct|old_position: Map.get(cs.data, field)}
   end
 
   defp update_max(%Order{repo: repo} = struct, cs) do
@@ -210,7 +210,7 @@ defmodule EctoOrdered do
 
   @doc false
   def before_delete(cs, struct) do
-    struct = %Order{max: max} = %{struct | module: cs.model.__struct__}
+    struct = %Order{max: max} = %{struct | module: cs.data.__struct__}
                                 |> update_max(cs)
                                 |> update_old_position(cs)
                                 |> update_old_scope(cs)

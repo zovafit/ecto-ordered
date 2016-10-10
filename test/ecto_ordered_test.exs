@@ -15,20 +15,20 @@ defmodule EctoOrderedTest do
 
     def changeset(model, params) do
       model
-      |> cast(params, [], [:position, :title])
+      |> cast(params, [:position, :title])
       |> set_order(:position)
     end
 
     def delete(model) do
       model
-      |> cast(%{}, [], [])
+      |> cast(%{}, [])
       |> Map.put(:action, :delete)
       |> set_order(:position)
     end
   end
 
   setup do
-    Ecto.Adapters.SQL.restart_test_transaction(EctoOrderedTest.Repo)
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(EctoOrderedTest.Repo)
   end
 
 
@@ -187,20 +187,21 @@ defmodule EctoOrderedTest.Scoped do
 
     def changeset(model, params) do
       model
-      |> cast(params, [],[:scope, :scoped_position, :title])
+      |> cast(params, [:scope, :scoped_position, :title])
       |> set_order(:scoped_position, :scope)
     end
 
     def delete(model) do
       model
-      |> cast(%{}, [], [])
+      |> cast(%{}, [])
       |> Map.put(:action, :delete)
       |> set_order(:scoped_position, :scope)
     end
+
   end
 
   setup do
-    Ecto.Adapters.SQL.restart_test_transaction(EctoOrderedTest.Repo)
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(EctoOrderedTest.Repo)
   end
   # Insertion
 
