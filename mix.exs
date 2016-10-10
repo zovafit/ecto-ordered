@@ -6,6 +6,7 @@ defmodule EctoOrdered.Mixfile do
      version: "0.0.2",
      elixir: "~> 1.0",
      description: "Ecto extension to support ordered list models",
+     elixirc_paths: path(Mix.env),
      package: package,
      deps: deps]
   end
@@ -25,6 +26,12 @@ defmodule EctoOrdered.Mixfile do
   defp app_list(_) do
     [:ecto]
   end
+
+  defp path(:test) do
+    ["lib", "test/support", "test/fixtures"]
+  end
+  defp path(_), do: ["lib"]
+
 
   # Dependencies can be Hex packages:
   #
