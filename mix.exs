@@ -46,12 +46,14 @@ defmodule EctoOrdered.Mixfile do
     [
      {:ecto, "~> 2.0"},
      {:postgrex, "~> 0.11.0", only: :test},
+     {:ex_doc, "~> 0.11.4", only: :dev},
+     {:earmark, ">= 0.0.0", only: :dev}
     ]
   end
 
   defp package do
     [
-      files: ["lib", "priv", "mix.exs", "README*", "readme*", "LICENSE*", "license*"],
+      files: ["lib", "mix.exs", "README*"],
       contributors: ["Yurii Rashkovskii", "Andrew Harvey"],
       maintainers: ["Andrew Harvey"],
       licenses: ["Apache 2.0"],
