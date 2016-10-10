@@ -70,7 +70,7 @@ defmodule EctoOrdered do
 
   @doc false
   def before_insert(cs, position_field, rank_field, scope_field) do
-    struct = %Order{module: cs.data.__struct__,
+    order = %Order{module: cs.data.__struct__,
                     position_field: position_field,
                     rank_field: rank_field,
                     scope_field: scope_field,
@@ -88,7 +88,7 @@ defmodule EctoOrdered do
 
   @doc false
   def before_update(cs, position_field, rank_field, scope_field \\ nil) do
-    struct = %Order{module: cs.data.__struct__,
+    order = %Order{module: cs.data.__struct__,
                     position_field: position_field,
                     rank_field: rank_field,
                     scope_field: scope_field,
@@ -174,7 +174,7 @@ defmodule EctoOrdered do
   end
 
   defp shift_others_up(%Order{rank_field: rank_field,
-                              repo: repo} = order, %{model: existing} = cs) do
+                              repo: repo} = order, %{data: existing} = cs) do
     current_rank = get_field(cs, rank_field)
     order
     |> queryable
@@ -185,7 +185,7 @@ defmodule EctoOrdered do
   end
 
   defp shift_others_down(%Order{rank_field: rank_field,
-                                repo: repo} = order, %{model: existing} = cs) do
+                                repo: repo} = order, %{data: existing} = cs) do
     current_rank = get_field(cs, rank_field)
     order
     |> queryable
@@ -225,7 +225,7 @@ defmodule EctoOrdered do
 
   defp neighbours_at_position(%Order{rank_field: rank_field,
                                      repo: repo
-                          } = order, position, %{model: existing} = cs) do
+                          } = order, position, %{data: existing} = cs) do
     %Order{current_last: current_last} = update_current_last(order, cs)
     neighbours = order
     |> queryable
