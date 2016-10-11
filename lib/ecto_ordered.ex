@@ -41,6 +41,7 @@ defmodule EctoOrdered do
   defstruct repo:         nil,
             module:       nil,
             position_field:        :position,
+            move_field:            :move,
             rank_field: :rank,
             scope_field:        nil,
             current_last: nil,
@@ -95,9 +96,11 @@ defmodule EctoOrdered do
                     scope_field: scope_field,
                     repo: cs.repo
                    }
-    case fetch_change(cs, position_field) do
-      {:ok, _} -> order |> update_rank(cs) |> ensure_unique_position(order)
-      :error -> cs
+    case {fetch_change(cs, position_field), fetch_change(cs, order.move_field)} do
+      {_, {:ok, _}} -> order |> move(cs, order.move_field) |> ensure_unique_position(order)
+      {{:ok, _},_} -> order |> update_rank(cs) |> ensure_unique_position(order)
+      foo ->
+        cs
     end
   end
 
@@ -117,9 +120,66 @@ defmodule EctoOrdered do
     end
   end
 
+  defp move(order, changeset, move_field) do
+    do_move(get_field(changeset, move_field), order, changeset)
+  end
+
+  def do_move(:up, order, changeset) do
+    case get_previous_two(order, changeset) do
+      {upper, lower} -> put_change(changeset, order.rank_field, rank_between(upper, lower))
+      _ -> changeset
+    end
+  end
+
+  def do_move(:down, order, changeset) do
+    case get_next_two(order, changeset) do
+      {upper, lower} -> put_change(changeset, order.rank_field, rank_between(upper, lower))
+      _ -> changeset
+    end
+  end
+
+  def do_move(_, order, changeset), do: changeset
+
+  defp get_previous_two(order, cs) do
+    current_rank = get_field(cs, order.rank_field)
+    previous = order
+    |> nearby_query(cs)
+    |> where([r], field(r, ^order.rank_field) < ^current_rank)
+    |> cs.repo.all
+    case previous do
+      [] -> nil
+      [lower] -> {@min, lower}
+      [upper, lower] -> {upper, lower}
+    end
+  end
+
+  defp get_next_two(order, cs) do
+    current_rank = get_field(cs, order.rank_field) 
+    next = order
+    |> nearby_query(cs)
+    |> where([r], field(r, ^order.rank_field) > ^current_rank)
+    |> cs.repo.all
+    case next do
+      [] -> nil
+      [lower] -> {@max, lower}
+      [upper, lower] -> {upper, lower}
+    end
+  end
+
+  defp nearby_query(order, cs) do
+    order
+    |> queryable
+    |> ranked(order.rank_field)
+    |> scope_query(order, cs)
+    |> select_rank(order.rank_field)
+    |> limit(2)
+    |> order_by(^order.rank_field)
+  end
+
   defp ensure_unique_position(cs, %Order{rank_field: rank_field} = order) do
-    rank = get_field(cs, rank_field)
-    if rank > @max || current_at_rank(order, cs) do
+    # If we're not changing ranks, then don't bother
+    rank = get_change(cs, rank_field)
+    if rank != nil && (rank > @max || current_at_rank(order, cs)) do
       shift_ranks(order, cs)
     end
     cs

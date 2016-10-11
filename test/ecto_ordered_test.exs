@@ -12,11 +12,12 @@ defmodule EctoOrderedTest do
       field :title,            :string
       field :rank,         :integer
       field :position,     :integer, virtual: true
+      field :move,         :any, virtual: true
     end
 
     def changeset(model, params) do
       model
-      |> cast(params, [:position, :title])
+      |> cast(params, [:position, :title, :move])
       |> set_order(:position, :rank)
     end
 
@@ -135,6 +136,49 @@ defmodule EctoOrderedTest do
 
     assert ranked_ids(Model) == [model1.id, model3.id, model2.id]
   end
+
+  test "moving an item up" do
+    model1 = Model.changeset(%Model{title: "item #1"}, %{}) |> Repo.insert!
+    model2 = Model.changeset(%Model{title: "item #2"}, %{}) |> Repo.insert!
+    model3 = Model.changeset(%Model{title: "item #3"}, %{}) |> Repo.insert!
+
+    model2 |> Model.changeset(%{move: :up}) |> Repo.update!
+
+    assert ranked_ids(Model) == [model2.id, model1.id, model3.id]
+  end
+
+  test "moving an item down using the :down position symbol" do
+    model1 = Model.changeset(%Model{title: "item #1"}, %{}) |> Repo.insert!
+    model2 = Model.changeset(%Model{title: "item #2"}, %{}) |> Repo.insert!
+    model3 = Model.changeset(%Model{title: "item #3"}, %{}) |> Repo.insert!
+
+    model2 |> Model.changeset(%{move: :down}) |> Repo.update!
+
+    assert ranked_ids(Model) == [model1.id, model3.id, model2.id]
+  end
+
+  test "moving an item :up when its already first" do
+    model1 = Model.changeset(%Model{title: "item #1"}, %{}) |> Repo.insert!
+    model2 = Model.changeset(%Model{title: "item #2"}, %{}) |> Repo.insert!
+    model3 = Model.changeset(%Model{title: "item #3"}, %{}) |> Repo.insert!
+
+    model1 |> Model.changeset(%{move: :up}) |> Repo.update!
+
+    assert ranked_ids(Model) == [model1.id, model2.id, model3.id]
+    assert Repo.get(Model, model1.id).rank == model1.rank
+  end
+
+  test "moving an item :down when it's already last" do
+    model1 = Model.changeset(%Model{title: "item #1"}, %{}) |> Repo.insert!
+    model2 = Model.changeset(%Model{title: "item #2"}, %{}) |> Repo.insert!
+    model3 = Model.changeset(%Model{title: "item #3"}, %{}) |> Repo.insert!
+
+    model3 |> Model.changeset(%{move: :down}) |> Repo.update!
+
+    assert ranked_ids(Model) == [model1.id, model2.id, model3.id]
+    assert Repo.get(Model, model3.id).rank == model3.rank
+  end
+
 
   ## Deletion
 
