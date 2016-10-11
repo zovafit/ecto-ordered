@@ -34,8 +34,9 @@ defmodule EctoOrdered do
 
   """
 
-  @max 8388607
-  @min -8388607
+  # These are the max bounds of an INT in postgresql
+  @max 2147483647
+  @min -2147483648
 
   defstruct repo:         nil,
             module:       nil,
@@ -308,7 +309,7 @@ defmodule EctoOrdered do
 
 
   defp rank_between(nil, nil) do
-    rank_between(8388607, -8388607)
+    rank_between(@max, @min)
   end
 
   defp rank_between(above, below) do
