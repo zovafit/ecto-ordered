@@ -317,21 +317,21 @@ defmodule EctoOrderedTest.Scoped do
   end
 
   test "scoped: moving between scopes" do
-    model1 = Model.changeset(%Model{scope: 1, title: "item #1"}, %{}) |> Repo.insert!
-    model2 = Model.changeset(%Model{scope: 1, title: "item #2"}, %{}) |> Repo.insert!
-    model3 = Model.changeset(%Model{scope: 1, title: "item #3"}, %{}) |> Repo.insert!
+    scope1_model1 = Model.changeset(%Model{scope: 1, title: "item #1"}, %{}) |> Repo.insert!
+    scope1_model2 = Model.changeset(%Model{scope: 1, title: "item #2"}, %{}) |> Repo.insert!
+    scope1_model3 = Model.changeset(%Model{scope: 1, title: "item #3"}, %{}) |> Repo.insert!
 
-    xmodel1 = Model.changeset(%Model{scope: 2, title: "item #1"}, %{}) |> Repo.insert!
-    xmodel2 = Model.changeset(%Model{scope: 2, title: "item #2"}, %{}) |> Repo.insert!
-    xmodel3 = Model.changeset(%Model{scope: 2, title: "item #3"}, %{}) |> Repo.insert!
+    scope2_model1 = Model.changeset(%Model{scope: 2, title: "item #1"}, %{}) |> Repo.insert!
+    scope2_model2 = Model.changeset(%Model{scope: 2, title: "item #2"}, %{}) |> Repo.insert!
+    scope2_model3 = Model.changeset(%Model{scope: 2, title: "item #3"}, %{}) |> Repo.insert!
 
-    model2 |> Model.changeset(%{scoped_position: 4, scope: 2}) |> Repo.update
+    scope1_model2 |> Model.changeset(%{scoped_position: 4, scope: 2}) |> Repo.update
 
-    assert Repo.get(Model, model1.id).scope == 1
-    assert Repo.get(Model, model3.id).scope == 1
-    assert ranked_ids(Model, 1) == [model1.id, model3.id]
+    assert Repo.get(Model, scope1_model1.id).scope == 1
+    assert Repo.get(Model, scope1_model3.id).scope == 1
+    assert ranked_ids(Model, 1) == [scope1_model1.id, scope1_model3.id]
 
-    assert ranked_ids(Model, 2) == [xmodel1.id, xmodel2.id, xmodel3.id, model2.id]
+    assert ranked_ids(Model, 2) == [scope2_model1.id, scope2_model2.id, scope2_model3.id, scope1_model2.id]
   end
 
   ## Deletion
