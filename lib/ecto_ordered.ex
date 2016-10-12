@@ -185,8 +185,8 @@ defmodule EctoOrdered do
     current_first = get_current_first(options, cs)
     current_last = get_current_last(options, cs)
     cond do
-      current_first > @min && current_rank == @max -> shift_others_down(options, cs)
-      current_last < @max - 1 && current_rank < current_last -> shift_others_up(options, cs)
+      current_first > @min && current_rank == @max -> decrement_other_ranks(options, cs)
+      current_last < @max - 1 && current_rank < current_last -> increment_other_ranks(options, cs)
       true -> rebalance_ranks(options, cs)
     end
   end
@@ -228,7 +228,7 @@ defmodule EctoOrdered do
     |> cs.repo.all
   end
 
-  defp shift_others_up(%Options{rank_field: rank_field} = options, %{data: existing} = cs) do
+  defp increment_other_ranks(%Options{rank_field: rank_field} = options, %{data: existing} = cs) do
     current_rank = get_field(cs, rank_field)
     options.module
     |> where([r], field(r, ^rank_field) >= ^current_rank)
@@ -237,7 +237,7 @@ defmodule EctoOrdered do
     cs
   end
 
-  defp shift_others_down(%Options{rank_field: rank_field} = options, %{data: existing} = cs) do
+  defp decrement_other_ranks(%Options{rank_field: rank_field} = options, %{data: existing} = cs) do
     current_rank = get_field(cs, rank_field)
     options.module
     |> where([r], field(r, ^rank_field) <= ^current_rank)
