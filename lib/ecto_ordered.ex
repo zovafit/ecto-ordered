@@ -164,8 +164,7 @@ defmodule EctoOrdered do
 
   defp nearby_query(options, cs) do
     options
-    |> queryable
-    |> ranked(options.rank_field)
+    |> rank_query
     |> scope_query(options, cs)
     |> select_rank(options.rank_field)
     |> limit(2)
@@ -224,16 +223,14 @@ defmodule EctoOrdered do
 
   defp current_order(%Options{rank_field: rank_field} = options, cs) do
     options
-    |> queryable
-    |> ranked(rank_field)
+    |> rank_query
     |> scope_query(options, cs)
     |> cs.repo.all
   end
 
   defp shift_others_up(%Options{rank_field: rank_field} = options, %{data: existing} = cs) do
     current_rank = get_field(cs, rank_field)
-    options
-    |> queryable
+    options.module
     |> where([r], field(r, ^rank_field) >= ^current_rank)
     |> exclude_existing(existing)
     |> cs.repo.update_all([inc: [{rank_field, 1}]])
@@ -242,8 +239,7 @@ defmodule EctoOrdered do
 
   defp shift_others_down(%Options{rank_field: rank_field} = options, %{data: existing} = cs) do
     current_rank = get_field(cs, rank_field)
-    options
-    |> queryable
+    options.module
     |> where([r], field(r, ^rank_field) <= ^current_rank)
     |> exclude_existing(existing)
     |> cs.repo.update_all([inc: [{rank_field, -1}]])
@@ -252,8 +248,7 @@ defmodule EctoOrdered do
 
   defp current_at_rank(%Options{rank_field: rank_field} = options, cs) do
     rank = get_field(cs, rank_field)
-    options
-    |> queryable
+    options.module
     |> where([r], field(r, ^rank_field) == ^rank)
     |> limit(1)
     |> scope_query(options, cs)
@@ -264,8 +259,7 @@ defmodule EctoOrdered do
                                      rank_field: rank_field,
                                     } = options, position, cs) when position <= 0 do
     first = options
-    |> queryable
-    |> ranked(rank_field)
+    |> rank_query
     |> select_rank(rank_field)
     |> limit(1)
     |> scope_query(options, cs) |> cs.repo.one
@@ -281,8 +275,7 @@ defmodule EctoOrdered do
                           } = options, position, %{data: existing} = cs) do
     current_last = get_current_last(options, cs)
     neighbours = options
-    |> queryable
-    |> ranked(rank_field)
+    |> rank_query
     |> select_rank(rank_field)
     |> limit(2)
     |> offset(^(position - 1))
@@ -294,11 +287,6 @@ defmodule EctoOrdered do
       [bef] -> {bef, @max}
       [bef, aft] -> {bef, aft}
     end
-  end
-
-
-  defp queryable(%Options{module: module}) do
-    module
   end
 
   defp ranked(query, rank_field) do
@@ -320,8 +308,7 @@ defmodule EctoOrdered do
   defp get_current_last(%Options{
                                 rank_field: rank_field,
                                } = options, cs) do
-    last = options
-    |> queryable
+    last = options.module
     |> select_rank(rank_field)
     |> order_by(desc: ^rank_field)
     |> limit(1)
@@ -337,9 +324,9 @@ defmodule EctoOrdered do
 
   defp get_current_first(%Options{rank_field: rank_field} = options, cs) do
     first = options
-    |> queryable
-    |> ranked(rank_field)
+    |> rank_query
     |> select_rank(rank_field)
+    |> order_by(asc: ^rank_field)
     |> limit(1)
     |> scope_query(options, cs)
     |> cs.repo.one
@@ -358,6 +345,11 @@ defmodule EctoOrdered do
 
   defp rank_between(above, below) do
     round((above - below) / 2) + below
+  end
+
+  defp rank_query(options) do
+    options.module
+    |> ranked(options.rank_field)
   end
 
   defp scope_query(query, %Options{scope_field: scope_field}, cs) do
