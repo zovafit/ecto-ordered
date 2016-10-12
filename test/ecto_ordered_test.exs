@@ -103,6 +103,16 @@ defmodule EctoOrderedTest do
     assert model.rank == model1.rank
   end
 
+  test "moving an item when nothing is ranked" do
+    model1 = %Model{title: "item #1"} |> Repo.insert!
+    model2 = %Model{title: "item #2"} |> Repo.insert!
+
+    model2 |> Model.changeset(%{move: :up}) |> Repo.update!
+
+    Repo.all(Model)
+    assert ranked_ids(Model) == [model2.id, model1.id]
+  end
+
   test "replacing an item below" do
     model1 = Model.changeset(%Model{title: "item #1"}, %{}) |> Repo.insert!
     model2 = Model.changeset(%Model{title: "item #2"}, %{}) |> Repo.insert!

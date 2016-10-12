@@ -117,21 +117,21 @@ defmodule EctoOrdered do
   def do_move(:up, options, changeset) do
     case get_previous_two(options, changeset) do
       {upper, lower} -> put_change(changeset, options.rank_field, rank_between(upper, lower))
-      _ -> changeset
+      _ -> ensure_ranked(options, changeset)
     end
   end
 
   def do_move(:down, options, changeset) do
     case get_next_two(options, changeset) do
       {upper, lower} -> put_change(changeset, options.rank_field, rank_between(upper, lower))
-      _ -> changeset
+      _ -> ensure_ranked(options, changeset)
     end
   end
 
   def do_move(_, options, changeset), do: changeset
 
   defp get_previous_two(options, cs) do
-    current_rank = get_field(cs, options.rank_field)
+    current_rank = get_field(cs, options.rank_field) || @max
     previous = options
     |> nearby_query(cs)
     |> where([r], field(r, ^options.rank_field) < ^current_rank)
@@ -172,6 +172,14 @@ defmodule EctoOrdered do
       shift_ranks(options, cs)
     end
     cs
+  end
+
+  defp ensure_ranked(options, changeset) do
+    if get_field(changeset, options.rank_field) do
+      changeset
+    else
+      update_rank(options, changeset)
+    end
   end
 
   defp shift_ranks(%Options{rank_field: rank_field} = options, cs) do
