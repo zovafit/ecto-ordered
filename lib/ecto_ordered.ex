@@ -49,7 +49,7 @@ defmodule EctoOrdered do
   - `rank_field` the field in which the ranking should be stored
   - `scope` the field in which the scope for the order should be stored (optional)
   """
-  def set_order(changeset, position_field, rank_field, scope_field \\ nil) do
+  def set_order(changeset, position_field \\ :position, rank_field \\ :rank, scope_field \\ nil) do
     changeset
     |> prepare_changes(fn changeset ->
       case changeset.action do
