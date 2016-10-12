@@ -14,7 +14,8 @@ defmodule MyModel do
   import EctoOrdered
 
   schema "models" do
-    field :position, :integer
+    field :position, :integer, virtual: true
+    field, :rank, :integer
   end
   
   def changeset(model, params) do
@@ -31,7 +32,7 @@ defmodule MyModel do
 
   schema "models" do
     field :reference_id, :integer
-    field :position,     :integer
+    field :position,     :integer, virtual: true
   end
   
   def changeset(model, params) do
