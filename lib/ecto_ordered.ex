@@ -11,26 +11,19 @@ defmodule EctoOrdered do
 
     schema "ordered_list_item" do
       field :title,            :string
-      field :position,         :integer
+      field :position,         :integer, virtual: true
+      field :rank,             :integer
+      field :move,             :any, virtual: true
     end
 
     def changeset(model, params) do
       model
-      |> cast(params, [:position, :title])
-      |> set_order(:position)
-    end
-
-    def delete(model) do
-      model
-      |> cast(%{}, [])
-      |> Map.put(:action, :delete)
-      |> set_order(:position)
+      |> cast(params, [:position, :title, :move])
+      |> set_order(:position, :rank)
     end
   end
   ```
 
-  Note the `delete` function used to ensure that the remaining items are repositioned on
-  deletion.
 
   """
 
@@ -52,7 +45,8 @@ defmodule EctoOrdered do
 
   The arguments are as follows:
   - `changeset` the changeset which is part of the ordered list
-  - `field` the field in which the order should be stored
+  - `position_field` the (virtual) field in which the order is set
+  - `rank_field` the field in which the ranking should be stored
   - `scope` the field in which the scope for the order should be stored (optional)
   """
   def set_order(changeset, position_field, rank_field, scope_field \\ nil) do
