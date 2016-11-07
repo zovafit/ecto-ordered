@@ -212,6 +212,9 @@ defmodule EctoOrdered do
     put_change(cs, rank_field, rank_for_row(0, get_field(cs, position_field), count, 1))
   end
 
+  defp rank_for_row(old_rank, :last, count, old_attempted_rank) do
+    rank_for_row(old_rank, count - 1, count, old_attempted_rank)
+  end
   defp rank_for_row(old_rank, index, count, old_attempted_rank) do
     # If our old rank is less than the old attempted rank, then our effective index is fine
     new_index = if old_rank < old_attempted_rank do
@@ -220,6 +223,7 @@ defmodule EctoOrdered do
     else
       index + 1
     end
+
     round((@max - @min) / count) * new_index + @min
   end
 

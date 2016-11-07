@@ -206,6 +206,9 @@ defmodule EctoOrderedTest do
 
   test "collision handling at max" do
     for _ <- 1..100 do
+      Model.changeset(%Model{}, %{position: 0}) |> Repo.insert
+    end
+    for _ <- 1..100 do
       Model.changeset(%Model{}, %{}) |> Repo.insert!
     end
 
