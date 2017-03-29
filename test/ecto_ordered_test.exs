@@ -151,10 +151,11 @@ defmodule EctoOrderedTest do
     model1 = Model.changeset(%Model{title: "item #1"}, %{}) |> Repo.insert!
     model2 = Model.changeset(%Model{title: "item #2"}, %{}) |> Repo.insert!
     model3 = Model.changeset(%Model{title: "item #3"}, %{}) |> Repo.insert!
+    model4 = Model.changeset(%Model{title: "item #4"}, %{}) |> Repo.insert!
 
-    model2 |> Model.changeset(%{move: :up}) |> Repo.update!
+    model4 |> Model.changeset(%{move: :up}) |> Repo.update!
 
-    assert ranked_ids(Model) == [model2.id, model1.id, model3.id]
+    assert ranked_ids(Model) == [model1.id, model2.id, model4.id, model3.id]
   end
 
   test "moving an item down using the :down position symbol" do
