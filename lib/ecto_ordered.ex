@@ -133,7 +133,7 @@ defmodule EctoOrdered do
   defp get_previous_two(options, cs) do
     current_rank = get_field(cs, options.rank_field) || @max
     previous = options
-    |> nearby_query(cs)
+    |> nearby_query(cs, :desc)
     |> where([r], field(r, ^options.rank_field) < ^current_rank)
     |> cs.repo.all
     case previous do
@@ -144,7 +144,7 @@ defmodule EctoOrdered do
   end
 
   defp get_next_two(options, cs) do
-    current_rank = get_field(cs, options.rank_field) 
+    current_rank = get_field(cs, options.rank_field)
     next = options
     |> nearby_query(cs)
     |> where([r], field(r, ^options.rank_field) > ^current_rank)
@@ -156,13 +156,14 @@ defmodule EctoOrdered do
     end
   end
 
-  defp nearby_query(options, cs) do
+  defp nearby_query(options, cs, direction \\ :asc) do
     options
     |> rank_query
     |> scope_query(options, cs)
     |> select_rank(options.rank_field)
     |> limit(2)
-    |> order_by(^options.rank_field)
+    |> Ecto.Query.exclude(:order_by)
+    |> order_by({^direction, ^options.rank_field})
   end
 
   defp ensure_unique_position(cs, %Options{rank_field: rank_field} = options) do
