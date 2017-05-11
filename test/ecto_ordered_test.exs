@@ -256,11 +256,12 @@ defmodule EctoOrderedTest.Scoped do
       field :scope,            :integer
       field :scoped_position,  :integer, virtual: true
       field :scoped_rank,      :integer
+      field :move,             :any, virtual: true
     end
 
     def changeset(model, params) do
       model
-      |> cast(params, [:scope, :scoped_position, :title])
+      |> cast(params, [:scope, :scoped_position, :title, :move, :scoped_rank])
       |> set_order(:scoped_position, :scoped_rank, :scope)
     end
   end
@@ -389,6 +390,22 @@ defmodule EctoOrderedTest.Scoped do
     assert ranked_ids(Model, 1) == [scope1_model1.id, scope1_model3.id]
 
     assert ranked_ids(Model, 2) == [scope2_model1.id, scope2_model2.id, scope2_model3.id, scope1_model2.id]
+  end
+
+  test "scoped: moving an item into an existing ranking doesn't affect other scopes' rankings" do
+    # Force sequential ranking on model1/model2 so that moving model3 up causes a shift in ranks
+    scope1_model1 = Model.changeset(%Model{scope: 1, title: "item #1"}, %{}) |> Repo.insert!
+    Model.changeset(scope1_model1, %{scoped_rank: 0}) |> Repo.update!
+    scope1_model2 = Model.changeset(%Model{scope: 1, title: "item #2"}, %{}) |> Repo.insert!
+    Model.changeset(scope1_model2, %{scoped_rank: 1}) |> Repo.update!
+    scope1_model3 = Model.changeset(%Model{scope: 1, title: "item #3"}, %{}) |> Repo.insert!
+
+    Model.changeset(%Model{scope: 2, title: "item #1"}, %{}) |> Repo.insert!
+    Model.changeset(%Model{scope: 2, title: "item #2"}, %{}) |> Repo.insert!
+    scope2_model3 = Model.changeset(%Model{scope: 2, title: "item #3"}, %{}) |> Repo.insert!
+    scope2_model3 = Model.changeset(scope2_model3, %{scoped_rank: 2147483647}) |> Repo.update!
+    Model.changeset(scope1_model3, %{move: :up}) |> Repo.update!
+    assert Repo.get(Model, scope2_model3.id).scoped_rank == scope2_model3.scoped_rank
   end
 
   ## Deletion
