@@ -357,18 +357,27 @@ defmodule EctoOrdered do
     |> ranked(options.rank_field)
   end
 
-  defp scope_query(query, %Options{scope_field: scope_field}, cs) when is_list(scope_field) do
-    new_scope = for field <- scope_field, do: {field, get_field(cs, field)}
+  defp scope_query(query, %Options{scope_field: scope_fields}, cs) when is_list(scope_fields) do
+    dynamic = Enum.reduce(scope_fields, true, fn(scope_field, dynamic) ->
+      scope = get_field(cs, scope_field, :no_scope_set)
+      case scope do
+        :no_scope_set -> dynamic
+        nil -> dynamic([d], is_nil(field(d, ^scope_field)) and ^dynamic)
+        _ -> dynamic([d], field(d, ^scope_field) == ^scope and ^dynamic)
+      end
+    end)
 
-    from q in query, where: ^new_scope
+    from q in query, where: ^dynamic
   end
 
   defp scope_query(query, %Options{scope_field: scope_field}, cs) do
-    scope = get_field(cs, scope_field)
-    if scope do
-      (from q in query, where: field(q, ^scope_field) == ^scope)
-    else
-      query
+    # Nil value and no scope in changeset are two distinct cases
+    scope = get_field(cs, scope_field, :no_scope_set)
+
+    case scope do
+      :no_scope_set -> query
+      nil -> (from q in query, where: is_nil(field(q, ^scope_field)))
+      _ -> (from q in query, where: field(q, ^scope_field) == ^scope)
     end
   end
 
