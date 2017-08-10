@@ -88,7 +88,7 @@ defmodule EctoOrdered do
     case {fetch_change(cs, position_field), fetch_change(cs, options.move_field)} do
       {_, {:ok, _}} -> options |> move(cs, options.move_field) |> ensure_unique_position(options)
       {{:ok, _},_} -> options |> update_rank(cs) |> ensure_unique_position(options)
-      foo ->
+      _foo ->
         cs
     end
   end
@@ -128,7 +128,7 @@ defmodule EctoOrdered do
     end
   end
 
-  def do_move(_, options, changeset), do: changeset
+  def do_move(_, _options, changeset), do: changeset
 
   defp get_previous_two(options, cs) do
     current_rank = get_field(cs, options.rank_field) || @max
@@ -144,7 +144,7 @@ defmodule EctoOrdered do
   end
 
   defp get_next_two(options, cs) do
-    current_rank = get_field(cs, options.rank_field) 
+    current_rank = get_field(cs, options.rank_field)
     next = options
     |> nearby_query(cs)
     |> where([r], field(r, ^options.rank_field) > ^current_rank)
@@ -227,7 +227,7 @@ defmodule EctoOrdered do
     round((@max - @min) / count) * new_index + @min
   end
 
-  defp current_order(%Options{rank_field: rank_field} = options, cs) do
+  defp current_order(%Options{rank_field: _rank_field} = options, cs) do
     options
     |> rank_query
     |> scope_query(options, cs)
@@ -343,7 +343,6 @@ defmodule EctoOrdered do
       options
     end
   end
-
 
   defp rank_between(nil, nil) do
     rank_between(@max, @min)
