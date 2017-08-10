@@ -357,6 +357,12 @@ defmodule EctoOrdered do
     |> ranked(options.rank_field)
   end
 
+  defp scope_query(query, %Options{scope_field: scope_field}, cs) when is_list(scope_field) do
+    new_scope = for field <- scope_field, do: {field, get_field(cs, field)}
+
+    from q in query, where: ^new_scope
+  end
+
   defp scope_query(query, %Options{scope_field: scope_field}, cs) do
     scope = get_field(cs, scope_field)
     if scope do
