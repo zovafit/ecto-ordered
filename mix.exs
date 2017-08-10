@@ -4,7 +4,7 @@ defmodule EctoOrdered.Mixfile do
   def project do
     [app: :ecto_ordered,
      version: "0.2.0-beta1",
-     elixir: "~> 1.0",
+     elixir: "~> 1.3",
      description: "Ecto extension to support ordered list models",
      elixirc_paths: path(Mix.env),
      package: package(),
