@@ -7,8 +7,8 @@ defmodule EctoOrdered.Mixfile do
      elixir: "~> 1.0",
      description: "Ecto extension to support ordered list models",
      elixirc_paths: path(Mix.env),
-     package: package,
-     deps: deps]
+     package: package(),
+     deps: deps()]
   end
 
   # Configuration for the OTP application
