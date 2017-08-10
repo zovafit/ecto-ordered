@@ -5,7 +5,7 @@ EctoOrdered
 Ecto extension to support ordered list items. Similar to [acts_as_list](https://github.com/swanandp/acts_as_list), but
 for [Ecto](https://github.com/elixir-lang/ecto)
 
-It uses a rank column in the database to store the rank. This will contain non-consecutive integers so new records can be placed in between two old records and no updates to the old records are needed. The position field is therefore virtual.
+It uses a rank column in the database to store the rank. This will contain non-consecutive integers so new records can be placed in between two old records and no updates to the old records are needed. The position field is therefore virtual. See:  [ranked-model](https://github.com/mixonic/ranked-model)
 
 
 Add the latest stable release to your mix.exs file:
@@ -13,7 +13,7 @@ Add the latest stable release to your mix.exs file:
 ```elixir
 defp deps do
   [
-    {:ecto_ordered, git: "https://github.com/zovafit/ecto-ordered", tag: "v0.2.0-beta1"}
+    {:ecto_ordered, git: "https://github.com/maartenvanvliet/ecto-ordered", branch: "master"}
   ]
 end
 ```
@@ -67,7 +67,7 @@ end
 
 ### Multi scoped positioning
 Same as above but with a list for the scope in the changeset
-```
+```elixir
   def changeset(model, params) do
     model
     |> cast(params, [:position, :title, :move, :reference_id])
