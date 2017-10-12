@@ -28,12 +28,15 @@ defmodule EctoOrdered do
   """
 
   # These are the max bounds of an INT in postgresql
-  @max 2147483647
-  @min -2147483648
+  @max 2_147_483_647
+  @min -2_147_483_648
 
   defmodule Options do
-    defstruct position_field: :position, move_field: :move,
-      rank_field: :rank, scope_field: nil, module: nil
+    defstruct position_field: :position,
+              move_field: :move,
+              rank_field: :rank,
+              scope_field: nil,
+              module: nil
   end
 
   import Ecto.Query
@@ -52,11 +55,14 @@ defmodule EctoOrdered do
   def set_order(changeset, position_field \\ :position, rank_field \\ :rank, scope_field \\ nil) do
     changeset
     |> prepare_changes(fn changeset ->
-      case changeset.action do
-        :insert -> EctoOrdered.before_insert changeset, position_field, rank_field, scope_field
-        :update -> EctoOrdered.before_update changeset, position_field, rank_field, scope_field
-      end
-    end)
+         case changeset.action do
+           :insert ->
+             EctoOrdered.before_insert(changeset, position_field, rank_field, scope_field)
+
+           :update ->
+             EctoOrdered.before_update(changeset, position_field, rank_field, scope_field)
+         end
+       end)
   end
 
   @doc false
@@ -68,11 +74,12 @@ defmodule EctoOrdered do
       module: cs.data.__struct__
     }
 
-    updated = if get_field(cs, position_field) do
-      options |> update_rank(cs)
-    else
-      options |> update_rank(put_change(cs, position_field, :last))
-    end
+    updated =
+      if get_field(cs, position_field) do
+        options |> update_rank(cs)
+      else
+        options |> update_rank(put_change(cs, position_field, :last))
+      end
 
     ensure_unique_position(updated, options)
   end
@@ -85,10 +92,15 @@ defmodule EctoOrdered do
       scope_field: scope_field,
       module: cs.data.__struct__
     }
+
     case {fetch_change(cs, position_field), fetch_change(cs, options.move_field)} do
-      {_, {:ok, _}} -> options |> move(cs, options.move_field) |> ensure_unique_position(options)
-      {{:ok, _},_} -> options |> update_rank(cs) |> ensure_unique_position(options)
-      foo ->
+      {_, {:ok, _}} ->
+        options |> move(cs, options.move_field) |> ensure_unique_position(options)
+
+      {{:ok, _}, _} ->
+        options |> update_rank(cs) |> ensure_unique_position(options)
+
+      _foo ->
         cs
     end
   end
@@ -97,13 +109,19 @@ defmodule EctoOrdered do
     case get_field(cs, position_field) do
       :last ->
         current_last = get_current_last(options, cs)
+
         if current_last do
           put_change(cs, rank_field, rank_between(@max, current_last))
         else
           update_rank(options, put_change(cs, position_field, :middle))
         end
-      :middle -> put_change(cs, rank_field, rank_between(@max, @min))
-      nil -> update_rank(options, put_change(cs, position_field, :last))
+
+      :middle ->
+        put_change(cs, rank_field, rank_between(@max, @min))
+
+      nil ->
+        update_rank(options, put_change(cs, position_field, :last))
+
       position when is_integer(position) ->
         {rank_before, rank_after} = neighbours_at_position(options, position, cs)
         put_change(cs, rank_field, rank_between(rank_after, rank_before))
@@ -128,14 +146,17 @@ defmodule EctoOrdered do
     end
   end
 
-  def do_move(_, options, changeset), do: changeset
+  def do_move(_, _options, changeset), do: changeset
 
   defp get_previous_two(options, cs) do
     current_rank = get_field(cs, options.rank_field) || @max
-    previous = options
-    |> nearby_query(cs)
-    |> where([r], field(r, ^options.rank_field) < ^current_rank)
-    |> cs.repo.all
+
+    previous =
+      options
+      |> nearby_query(cs)
+      |> where([r], field(r, ^options.rank_field) < ^current_rank)
+      |> cs.repo.all
+
     case previous do
       [] -> nil
       [lower] -> {@min, lower}
@@ -144,11 +165,14 @@ defmodule EctoOrdered do
   end
 
   defp get_next_two(options, cs) do
-    current_rank = get_field(cs, options.rank_field) 
-    next = options
-    |> nearby_query(cs)
-    |> where([r], field(r, ^options.rank_field) > ^current_rank)
-    |> cs.repo.all
+    current_rank = get_field(cs, options.rank_field)
+
+    next =
+      options
+      |> nearby_query(cs)
+      |> where([r], field(r, ^options.rank_field) > ^current_rank)
+      |> cs.repo.all
+
     case next do
       [] -> nil
       [lower] -> {@max, lower}
@@ -168,9 +192,11 @@ defmodule EctoOrdered do
   defp ensure_unique_position(cs, %Options{rank_field: rank_field} = options) do
     # If we're not changing ranks, then don't bother
     rank = get_change(cs, rank_field)
+
     if rank != nil && (rank > @max || current_at_rank(options, cs)) do
       shift_ranks(options, cs)
     end
+
     cs
   end
 
@@ -186,6 +212,7 @@ defmodule EctoOrdered do
     current_rank = get_field(cs, rank_field)
     current_first = get_current_first(options, cs)
     current_last = get_current_last(options, cs)
+
     cond do
       current_first > @min && current_rank == @max -> decrement_other_ranks(options, cs)
       current_last < @max - 1 && current_rank < current_last -> increment_other_ranks(options, cs)
@@ -193,41 +220,48 @@ defmodule EctoOrdered do
     end
   end
 
-  defp rebalance_ranks(%Options{
-                              rank_field: rank_field,
-                              position_field: position_field
-                             } = options, cs) do
+  defp rebalance_ranks(
+         %Options{
+           rank_field: rank_field,
+           position_field: position_field
+         } = options,
+         cs
+       ) do
     rows = current_order(options, cs)
     old_attempted_rank = get_field(cs, rank_field)
     count = length(rows) + 1
 
     rows
-    |> Enum.with_index
+    |> Enum.with_index()
     |> Enum.map(fn {row, index} ->
-      old_rank = Map.get(row, rank_field)
-      row
-      |> change([{rank_field,  rank_for_row(old_rank, index, count, old_attempted_rank)}])
-      |> cs.repo.update!
-    end)
+         old_rank = Map.get(row, rank_field)
+
+         row
+         |> change([{rank_field, rank_for_row(old_rank, index, count, old_attempted_rank)}])
+         |> cs.repo.update!
+       end)
+
     put_change(cs, rank_field, rank_for_row(0, get_field(cs, position_field), count, 1))
   end
 
   defp rank_for_row(old_rank, :last, count, old_attempted_rank) do
     rank_for_row(old_rank, count - 1, count, old_attempted_rank)
   end
+
   defp rank_for_row(old_rank, index, count, old_attempted_rank) do
     # If our old rank is less than the old attempted rank, then our effective index is fine
-    new_index = if old_rank < old_attempted_rank do
-      index
-    # otherwise, we need to increment our index by 1
-    else
-      index + 1
-    end
+    new_index =
+      if old_rank < old_attempted_rank do
+        index
+        # otherwise, we need to increment our index by 1
+      else
+        index + 1
+      end
 
     round((@max - @min) / count) * new_index + @min
   end
 
-  defp current_order(%Options{rank_field: rank_field} = options, cs) do
+  defp current_order(%Options{rank_field: _rank_field} = options, cs) do
     options
     |> rank_query
     |> scope_query(options, cs)
@@ -236,24 +270,29 @@ defmodule EctoOrdered do
 
   defp increment_other_ranks(%Options{rank_field: rank_field} = options, %{data: existing} = cs) do
     current_rank = get_field(cs, rank_field)
+
     options.module
     |> where([r], field(r, ^rank_field) >= ^current_rank)
     |> exclude_existing(existing)
-    |> cs.repo.update_all([inc: [{rank_field, 1}]])
+    |> cs.repo.update_all(inc: [{rank_field, 1}])
+
     cs
   end
 
   defp decrement_other_ranks(%Options{rank_field: rank_field} = options, %{data: existing} = cs) do
     current_rank = get_field(cs, rank_field)
+
     options.module
     |> where([r], field(r, ^rank_field) <= ^current_rank)
     |> exclude_existing(existing)
-    |> cs.repo.update_all([inc: [{rank_field, -1}]])
+    |> cs.repo.update_all(inc: [{rank_field, -1}])
+
     cs
   end
 
   defp current_at_rank(%Options{rank_field: rank_field} = options, cs) do
     rank = get_field(cs, rank_field)
+
     options.module
     |> where([r], field(r, ^rank_field) == ^rank)
     |> limit(1)
@@ -261,14 +300,21 @@ defmodule EctoOrdered do
     |> cs.repo.one
   end
 
-  defp neighbours_at_position(%Options{
-                                     rank_field: rank_field,
-                                    } = options, position, cs) when position <= 0 do
-    first = options
-    |> rank_query
-    |> select_rank(rank_field)
-    |> limit(1)
-    |> scope_query(options, cs) |> cs.repo.one
+  defp neighbours_at_position(
+         %Options{
+           rank_field: rank_field
+         } = options,
+         position,
+         cs
+       )
+       when position <= 0 do
+    first =
+      options
+      |> rank_query
+      |> select_rank(rank_field)
+      |> limit(1)
+      |> scope_query(options, cs)
+      |> cs.repo.one
 
     if first do
       {@min, first}
@@ -277,17 +323,23 @@ defmodule EctoOrdered do
     end
   end
 
-  defp neighbours_at_position(%Options{rank_field: rank_field,
-                          } = options, position, %{data: existing} = cs) do
+  defp neighbours_at_position(
+         %Options{rank_field: rank_field} = options,
+         position,
+         %{data: existing} = cs
+       ) do
     current_last = get_current_last(options, cs)
-    neighbours = options
-    |> rank_query
-    |> select_rank(rank_field)
-    |> limit(2)
-    |> offset(^(position - 1))
-    |> scope_query(options, cs)
-    |> exclude_existing(existing)
-    |> cs.repo.all
+
+    neighbours =
+      options
+      |> rank_query
+      |> select_rank(rank_field)
+      |> limit(2)
+      |> offset(^(position - 1))
+      |> scope_query(options, cs)
+      |> exclude_existing(existing)
+      |> cs.repo.all
+
     case neighbours do
       [] -> {current_last, @max}
       [bef] -> {bef, @max}
@@ -296,11 +348,11 @@ defmodule EctoOrdered do
   end
 
   defp ranked(query, rank_field) do
-    (from m in query, order_by: [asc: field(m, ^rank_field)])
+    from(m in query, order_by: [asc: field(m, ^rank_field)])
   end
 
   defp select_rank(query, rank_field) do
-    (from q in query, select: field(q, ^rank_field))
+    from(q in query, select: field(q, ^rank_field))
   end
 
   defp exclude_existing(query, %{id: nil}) do
@@ -308,18 +360,22 @@ defmodule EctoOrdered do
   end
 
   defp exclude_existing(query, existing) do
-    from r in query, where: r.id != ^existing.id
+    from(r in query, where: r.id != ^existing.id)
   end
 
-  defp get_current_last(%Options{
-                                rank_field: rank_field,
-                               } = options, cs) do
-    last = options.module
-    |> select_rank(rank_field)
-    |> order_by(desc: ^rank_field)
-    |> limit(1)
-    |> scope_query(options, cs)
-    |> cs.repo.one
+  defp get_current_last(
+         %Options{
+           rank_field: rank_field
+         } = options,
+         cs
+       ) do
+    last =
+      options.module
+      |> select_rank(rank_field)
+      |> order_by(desc: ^rank_field)
+      |> limit(1)
+      |> scope_query(options, cs)
+      |> cs.repo.one
 
     if last do
       last
@@ -329,13 +385,14 @@ defmodule EctoOrdered do
   end
 
   defp get_current_first(%Options{rank_field: rank_field} = options, cs) do
-    first = options
-    |> rank_query
-    |> select_rank(rank_field)
-    |> order_by(asc: ^rank_field)
-    |> limit(1)
-    |> scope_query(options, cs)
-    |> cs.repo.one
+    first =
+      options
+      |> rank_query
+      |> select_rank(rank_field)
+      |> order_by(asc: ^rank_field)
+      |> limit(1)
+      |> scope_query(options, cs)
+      |> cs.repo.one
 
     if first do
       first
@@ -343,7 +400,6 @@ defmodule EctoOrdered do
       options
     end
   end
-
 
   defp rank_between(nil, nil) do
     rank_between(@max, @min)
@@ -358,13 +414,29 @@ defmodule EctoOrdered do
     |> ranked(options.rank_field)
   end
 
-  defp scope_query(query, %Options{scope_field: scope_field}, cs) do
-    scope = get_field(cs, scope_field)
-    if scope do
-      (from q in query, where: field(q, ^scope_field) == ^scope)
-    else
-      query
-    end
+  defp scope_query(query, %Options{scope_field: scope_fields}, cs) when is_list(scope_fields) do
+    dynamic =
+      Enum.reduce(scope_fields, true, fn scope_field, dynamic ->
+        scope = get_field(cs, scope_field, :no_scope_set)
+
+        case scope do
+          :no_scope_set -> dynamic
+          nil -> dynamic([d], is_nil(field(d, ^scope_field)) and ^dynamic)
+          _ -> dynamic([d], field(d, ^scope_field) == ^scope and ^dynamic)
+        end
+      end)
+
+    from(q in query, where: ^dynamic)
   end
 
+  defp scope_query(query, %Options{scope_field: scope_field}, cs) do
+    # Nil value and no scope in changeset are two distinct cases
+    scope = get_field(cs, scope_field, :no_scope_set)
+
+    case scope do
+      :no_scope_set -> query
+      nil -> from(q in query, where: is_nil(field(q, ^scope_field)))
+      _ -> from(q in query, where: field(q, ^scope_field) == ^scope)
+    end
+  end
 end

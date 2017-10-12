@@ -1,4 +1,4 @@
-Logger.configure level: :error
+Logger.configure(level: :error)
 ExUnit.configure(exclude: [skip: true])
 
 defmodule EctoOrdered.TestCase do
@@ -6,9 +6,9 @@ defmodule EctoOrdered.TestCase do
 
   defmacro debug(do: block) do
     quote do
-      Logger.configure level: :debug
+      Logger.configure(level: :debug)
       unquote(block)
-      Logger.configure level: :error
+      Logger.configure(level: :error)
     end
   end
 
@@ -17,15 +17,12 @@ defmodule EctoOrdered.TestCase do
       import EctoOrdered.TestCase, only: :macros
     end
   end
-
 end
 
+Mix.Task.run("ecto.drop", ~w(-r EctoOrderedTest.Repo))
+Mix.Task.run("ecto.create", ~w(-r EctoOrderedTest.Repo))
+Mix.Task.run("ecto.migrate", ~w(-r EctoOrderedTest.Repo))
 
-Mix.Task.run "ecto.drop", ~w(-r EctoOrderedTest.Repo)
-Mix.Task.run "ecto.create", ~w(-r EctoOrderedTest.Repo)
-Mix.Task.run "ecto.migrate", ~w(-r EctoOrderedTest.Repo)
-
-EctoOrderedTest.Repo.start_link
+EctoOrderedTest.Repo.start_link()
 ExUnit.start()
 Ecto.Adapters.SQL.Sandbox.mode(EctoOrderedTest.Repo, :manual)
-
